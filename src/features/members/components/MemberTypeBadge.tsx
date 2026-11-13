@@ -6,7 +6,7 @@ export function MemberTypeBadge({ result }: { result?: MemberTypeResult }) {
   if (!result) return null;
   const info = memberTypeInfo[result.type];
   return (
-    <Badge variant={info.variant} title={`${info.rule}\n${result.detail}`}>
+    <Badge variant={info.variant} title={`${info.blurb}\n${result.why}`}>
       {info.label}
     </Badge>
   );

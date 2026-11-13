@@ -33,7 +33,7 @@ export default function MemberList({ members, types, onDelete, onRename }: Props
   return (
     <ul className="divide-y divide-border">
       {members.map((m) => (
-        <li key={m.id} className="flex items-center gap-3 px-2 py-2.5">
+        <li key={m.id} className="flex items-center gap-3 px-2 py-3">
           <Avatar name={m.name} />
           {editingId === m.id ? (
             <form onSubmit={(e) => save(e, m)} className="flex flex-1 items-center gap-2">
@@ -59,8 +59,22 @@ export default function MemberList({ members, types, onDelete, onRename }: Props
             </form>
           ) : (
             <>
-              <span className="min-w-0 flex-1 truncate font-bold">{m.name}</span>
-              <MemberTypeBadge result={types.get(m.id)} />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="truncate font-bold">{m.name}</span>
+                  <MemberTypeBadge result={types.get(m.id)} />
+                </div>
+                {types.get(m.id) && (
+                  <p className="mt-1 max-w-prose text-xs leading-snug text-muted-foreground">{types.get(m.id)!.why}</p>
+                )}
+              </div>
+              <div
+                className="w-16 shrink-0 text-center"
+                title="Sessions joined so far"
+              >
+                <span className="block text-lg font-extrabold leading-none">{types.get(m.id)?.played ?? 0}</span>
+                <span className="mt-1 block text-[11px] font-semibold text-muted-foreground">sessions</span>
+              </div>
               <Button
                 size="icon"
                 variant="ghost"

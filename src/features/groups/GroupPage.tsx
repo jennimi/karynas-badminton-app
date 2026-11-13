@@ -10,30 +10,49 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { cn } from '../../shared/lib/cn';
 import { EmptyState } from '../../shared/components/EmptyState';
+import { SortControl, type SortDir } from '../../shared/components/SortControl';
 import { StatCard } from '../../shared/components/StatCard';
 import { Avatar } from '../../shared/ui/avatar';
-import { Badge } from '../../shared/ui/badge';
 import { Button, buttonVariants } from '../../shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
 import { Input } from '../../shared/ui/input';
 import { Skeleton } from '../../shared/ui/skeleton';
 import { Table, TBody, TD, TH, THead, TR } from '../../shared/ui/table';
-import { todayString } from '../../shared/utils/format';
+import { Tabs } from '../../shared/ui/tabs';
+import { addDays, todayString } from '../../shared/utils/format';
 import { getMembers } from '../members/api';
 import { MemberTypeBadge } from '../members/components/MemberTypeBadge';
-import { useMemberTypes } from '../members/memberType';
+import { sortMembers, useMemberTypes, type MemberSort } from '../members/memberType';
 import { getAttendance, getSessionSummaries } from '../sessions/api';
 import { SessionCard } from '../sessions/components/SessionCard';
+import type { Member } from '../../shared/types';
 import { getGroup } from './api';
 import { GroupDialog } from './components/GroupDialog';
 import { useSyncCurrentGroup } from './hooks';
+
+/** Attendance numbers on this page look at the last N days ("all time" is a toggle on Top attendance). */
+const RECENT_DAYS = 60;
+
+/** One place in the attendance ranking. More than one member when they're still tied after the tie-break. */
+interface RankGroup {
+  members: Member[];
+  attended: number;
+  /** date of the most recent session any of them joined */
+  last: string;
+}
+
+const firstName = (m: Member) => m.name.split(' ')[0];
 
 /** Inside a group: info, upcoming sessions, member statistics and the member list. */
 export default function GroupPage() {
   const { id } = useParams<{ id: string }>();
   const [editing, setEditing] = useState(false);
   const [query, setQuery] = useState('');
+  const [topRange, setTopRange] = useState<'recent' | 'all'>('recent');
+  const [sortKey, setSortKey] = useState<MemberSort>('sessions');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   useSyncCurrentGroup(id);
 
   const { data: group, isLoading, isError } = useQuery({
@@ -60,21 +79,46 @@ export default function GroupPage() {
   const types = useMemberTypes(id, members);
 
   const stats = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const a of attendance) counts.set(a.member_id, (counts.get(a.member_id) ?? 0) + 1);
+    const t = todayString();
+    const since = addDays(t, -RECENT_DAYS);
+    const dateOf = new Map(sessions.map((s) => [s.id, s.date]));
 
-    const ranked = members
-      .map((m) => ({ member: m, attended: counts.get(m.id) ?? 0 }))
-      .sort((a, b) => b.attended - a.attended || a.member.name.localeCompare(b.member.name));
+    // sessions that have happened (upcoming sign-ups don't count), optionally only the recent ones
+    const rank = (from: string | null) => {
+      const counts = new Map<string, { n: number; last: string }>();
+      for (const a of attendance) {
+        const d = dateOf.get(a.session_id);
+        if (!d || d > t || (from && d < from)) continue;
+        const c = counts.get(a.member_id) ?? { n: 0, last: '' };
+        c.n++;
+        if (d > c.last) c.last = d;
+        counts.set(a.member_id, c);
+      }
+      // most sessions first; a tie goes to whoever played most recently (not to the alphabet)
+      const rows = members
+        .filter((m) => counts.has(m.id))
+        .map((m) => ({ m, ...counts.get(m.id)! }))
+        .sort((a, b) => b.n - a.n || b.last.localeCompare(a.last) || a.m.name.localeCompare(b.m.name));
+      // still tied on both: share one place
+      const groups: RankGroup[] = [];
+      for (const r of rows) {
+        const g = groups.at(-1);
+        if (g && g.attended === r.n && g.last === r.last) g.members.push(r.m);
+        else groups.push({ members: [r.m], attended: r.n, last: r.last });
+      }
+      return groups;
+    };
+    const recent = rank(since);
+    const allTime = rank(null);
 
-    const newcomers = [...types.values()].filter((t) => t.type === 'newcomer').length;
+    const newcomers = [...types.values()].filter((x) => x.type === 'newcomer').length;
 
-    const withPeople = sessions.filter((s) => s.participant_count > 0);
-    const avg = withPeople.length
-      ? Math.round(withPeople.reduce((n, s) => n + s.participant_count, 0) / withPeople.length)
+    const recentSessions = sessions.filter((s) => s.date <= t && s.date >= since && s.participant_count > 0);
+    const avg = recentSessions.length
+      ? Math.round(recentSessions.reduce((n, s) => n + s.participant_count, 0) / recentSessions.length)
       : null;
 
-    return { ranked, newcomers, avg, top: ranked[0] };
+    return { recent, allTime, newcomers, avg, top: recent[0] };
   }, [members, sessions, attendance, types]);
 
   // sessions come newest first
@@ -86,10 +130,15 @@ export default function GroupPage() {
       past: sessions.find((s) => s.date < t),
     };
   }, [sessions]);
-  const filtered = stats.ranked.filter((r) =>
-    r.member.name.toLowerCase().includes(query.trim().toLowerCase())
+  const filtered = sortMembers(
+    members.filter((m) => m.name.toLowerCase().includes(query.trim().toLowerCase())),
+    types,
+    sortKey,
+    sortDir
   );
-  const topFive = stats.ranked.filter((r) => r.attended > 0).slice(0, 5);
+  const topFive = (topRange === 'recent' ? stats.recent : stats.allTime).slice(0, 5);
+  const topName = (g?: RankGroup) =>
+    !g ? '—' : g.members.length <= 2 ? g.members.map(firstName).join(' & ') : `${firstName(g.members[0])} +${g.members.length - 1}`;
 
   if (isLoading) return <Skeleton className="h-56" />;
   if (isError || !group) {
@@ -136,15 +185,15 @@ export default function GroupPage() {
         <StatCard
           label="Avg. attendance"
           value={stats.avg ?? '—'}
-          hint="per session"
+          hint={`per session · last ${RECENT_DAYS} days`}
           icon={CalendarDays}
           tone="lime"
         />
         <StatCard label="Newcomers" value={stats.newcomers} hint="recently joined" icon={UserPlus} tone="butter" />
         <StatCard
           label="Most active"
-          value={stats.top && stats.top.attended > 0 ? stats.top.member.name.split(' ')[0] : '—'}
-          hint={stats.top && stats.top.attended > 0 ? `${stats.top.attended} sessions` : undefined}
+          value={topName(stats.top)}
+          hint={stats.top ? `${stats.top.attended} sessions · ${RECENT_DAYS} days` : undefined}
           icon={Trophy}
           tone="coral"
         />
@@ -215,21 +264,40 @@ export default function GroupPage() {
         <Card className="min-w-0 lg:col-span-2">
           <CardHeader>
             <CardTitle>Top attendance</CardTitle>
-            <Badge variant="lime">All time</Badge>
+            <Tabs
+              label="Top attendance period"
+              value={topRange}
+              onChange={setTopRange}
+              options={[
+                { value: 'recent', label: `${RECENT_DAYS} days` },
+                { value: 'all', label: 'All time' },
+              ]}
+            />
           </CardHeader>
           <CardContent className="space-y-4">
             {topFive.length === 0 && (
               <p className="py-6 text-center text-sm text-muted-foreground">
-                Attendance shows up here once sessions have participants.
+                {topRange === 'recent'
+                  ? `Nobody has joined a session in the last ${RECENT_DAYS} days.`
+                  : 'Attendance shows up here once sessions have participants.'}
               </p>
             )}
             {topFive.map((r, i) => (
-              <div key={r.member.id} className="flex items-center gap-3">
+              <div key={r.members[0].id} className="flex items-center gap-3">
                 <span className="w-4 text-sm font-extrabold text-muted-foreground">{i + 1}</span>
-                <Avatar name={r.member.name} className="size-8" />
+                <div className="flex shrink-0 -space-x-2">
+                  {r.members.slice(0, 3).map((m) => (
+                    <Avatar key={m.id} name={m.name} className="size-8 ring-2 ring-card" />
+                  ))}
+                </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex justify-between gap-2 text-sm">
-                    <span className="truncate font-bold">{r.member.name}</span>
+                    <span
+                      className={cn('font-bold', r.members.length === 1 && 'truncate')}
+                      title={r.members.length > 1 ? 'Tied on sessions and on most recent session' : undefined}
+                    >
+                      {r.members.map((m) => m.name).join(', ')}
+                    </span>
                     <span className="font-semibold text-muted-foreground">{r.attended}</span>
                   </div>
                   <div
@@ -252,6 +320,20 @@ export default function GroupPage() {
       <Card>
         <CardHeader className="flex-wrap">
           <CardTitle>Members</CardTitle>
+          <SortControl
+            options={[
+              { value: 'name', label: 'Name' },
+              { value: 'sessions', label: 'Sessions joined' },
+              { value: 'status', label: 'Status' },
+            ]}
+            value={sortKey}
+            dir={sortDir}
+            onChange={(k) => {
+              setSortKey(k);
+              setSortDir(k === 'sessions' ? 'desc' : 'asc');
+            }}
+            onToggleDir={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          />
           <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -284,7 +366,7 @@ export default function GroupPage() {
                 </TR>
               </THead>
               <TBody>
-                {filtered.map(({ member, attended }) => (
+                {filtered.map((member) => (
                   <TR key={member.id}>
                     <TD>
                       <div className="flex items-center gap-3">
@@ -293,7 +375,7 @@ export default function GroupPage() {
                         <MemberTypeBadge result={types.get(member.id)} />
                       </div>
                     </TD>
-                    <TD className="text-right font-semibold">{attended}</TD>
+                    <TD className="text-right font-semibold">{types.get(member.id)?.played ?? 0}</TD>
                   </TR>
                 ))}
                 {filtered.length === 0 && (

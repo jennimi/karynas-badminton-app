@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import DashboardPage from './features/dashboard/DashboardPage';
 import DesignKitPage from './features/dashboard/DesignKitPage';
 import GroupPage from './features/groups/GroupPage';
+import ChatImportPage from './features/chat-import/ChatImportPage';
 import { GroupSwitcher } from './features/groups/components/GroupSwitcher';
 import { useCurrentGroup } from './features/groups/hooks';
 import MembersPage from './features/members/MembersPage';
@@ -47,6 +48,7 @@ export default function App() {
               <Route path="/sessions/new" element={<CreateSessionPage />} />
               <Route path="/sessions/:id" element={<SessionDetailPage />} />
               <Route path="/members" element={<MembersPage />} />
+              <Route path="/chat-import" element={<ChatImportPage />} />
               {/* Developer reference for the shared components */}
               <Route path="/design-kit" element={<DesignKitPage />} />
             </Route>

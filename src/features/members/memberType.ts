@@ -15,9 +15,9 @@ export const TYPE_RULES = {
   /** ...and Guest/Hiatus: haven't joined for more than this many days. */
   inactiveDays: 21,
   /** Nolep: joined more than this share of the sessions in the window. */
-  nolepShare: 0.85,
-  /** The "month" for Nolep: the last N days (rolling, so it doesn't reset on the 1st). */
-  nolepWindowDays: 30,
+  nolepShare: 0.65,
+  /** Nolep and Regular both look at the past N weeks. */
+  nolepWindowWeeks: 8,
   /** Nolep needs at least this many sessions in the window to count. */
   nolepMinSessions: 3,
 };
@@ -25,29 +25,38 @@ export const TYPE_RULES = {
 /** Display order = priority order (first rule that matches wins). */
 export const memberTypeInfo: Record<
   MemberType,
-  { label: string; variant: 'brand' | 'neutral' | 'butter' | 'coral' | 'lime'; rule: string }
+  { label: string; variant: 'brand' | 'neutral' | 'butter' | 'coral' | 'lime'; rule: string; blurb: string }
 > = {
   newcomer: {
     label: 'Newcomer',
     variant: 'brand',
     rule: `Only joined within the group's ${TYPE_RULES.newcomerRecentSessions} most recent sessions`,
+    blurb: 'New to the group. They have only joined the latest sessions (or haven’t played yet).',
   },
   guest: {
     label: 'Guest',
     variant: 'neutral',
     rule: `Joined ${TYPE_RULES.guestMaxSessions} sessions or fewer, and not for over ${TYPE_RULES.inactiveDays / 7} weeks`,
+    blurb: `Dropped by once or twice and hasn’t been back for over ${TYPE_RULES.inactiveDays / 7} weeks.`,
   },
   hiatus: {
     label: 'Hiatus',
     variant: 'butter',
     rule: `Played before, but not in the past ${TYPE_RULES.inactiveDays / 7} weeks`,
+    blurb: `Used to play regularly, but hasn’t joined anything in the past ${TYPE_RULES.inactiveDays / 7} weeks.`,
   },
   nolep: {
     label: 'Nolep',
     variant: 'coral',
-    rule: `Joined over ${TYPE_RULES.nolepShare * 100}% of the last ${TYPE_RULES.nolepWindowDays} days' sessions`,
+    rule: `Joined over ${TYPE_RULES.nolepShare * 100}% of the sessions in the past ${TYPE_RULES.nolepWindowWeeks} weeks`,
+    blurb: `Shows up to almost everything: over ${TYPE_RULES.nolepShare * 100}% of the sessions in the past ${TYPE_RULES.nolepWindowWeeks} weeks.`,
   },
-  regular: { label: 'Regular', variant: 'lime', rule: 'Everyone else' },
+  regular: {
+    label: 'Regular',
+    variant: 'lime',
+    rule: `Everyone else, judged on the past ${TYPE_RULES.nolepWindowWeeks} weeks`,
+    blurb: `Plays often enough, but not at everything in the past ${TYPE_RULES.nolepWindowWeeks} weeks.`,
+  },
 };
 
 export interface MemberTypeResult {
@@ -57,6 +66,8 @@ export interface MemberTypeResult {
   lastPlayed: string | null;
   /** e.g. "6 sessions · last played 25 days ago" */
   detail: string;
+  /** plain-language reason for this label, with this person's numbers */
+  why: string;
 }
 
 const DAY = 86_400_000;
@@ -73,7 +84,7 @@ export function classifyMembers(
   const past = sessions.filter((s) => s.date <= today).sort((a, b) => b.date.localeCompare(a.date));
   const dateOf = new Map(past.map((s) => [s.id, s.date]));
   const recent = new Set(past.slice(0, TYPE_RULES.newcomerRecentSessions).map((s) => s.id));
-  const windowStart = now - TYPE_RULES.nolepWindowDays * DAY;
+  const windowStart = now - TYPE_RULES.nolepWindowWeeks * 7 * DAY;
   const windowIds = new Set(past.filter((s) => toTime(s.date) > windowStart).map((s) => s.id));
 
   const joined = new Map<string, string[]>(); // member -> session ids (past only)
@@ -114,9 +125,49 @@ export function classifyMembers(
       daysAway === null
         ? 'Hasn’t played a session yet'
         : `${plural} · last played ${daysAway === 0 ? 'today' : `${daysAway} day${daysAway === 1 ? '' : 's'} ago`}`;
-    result.set(m.id, { type, played: ids.length, lastPlayed, detail });
+    const inWindow = ids.filter((id) => windowIds.has(id)).length;
+    const days = `${daysAway} day${daysAway === 1 ? '' : 's'}`;
+    const weeks = TYPE_RULES.inactiveDays / 7;
+    const why: Record<MemberType, string> = {
+      newcomer:
+        ids.length === 0
+          ? 'Hasn’t joined a session yet.'
+          : `Only joined ${plural}, all within the ${TYPE_RULES.newcomerRecentSessions} most recent.`,
+      guest: `Joined only ${plural}, and the last was ${days} ago (over ${weeks} weeks).`,
+      hiatus: `Joined ${plural} but nothing for ${days} (over ${weeks} weeks).`,
+      nolep: `Joined ${inWindow} of the ${windowIds.size} sessions in the past ${TYPE_RULES.nolepWindowWeeks} weeks (${Math.round((inWindow / windowIds.size) * 100)}%, over ${TYPE_RULES.nolepShare * 100}%).`,
+      regular:
+        windowIds.size < TYPE_RULES.nolepMinSessions
+          ? `Joined ${plural}, last ${daysAway === 0 ? 'today' : `${days} ago`}. Too few recent sessions to count as Nolep.`
+          : `Joined ${inWindow} of the ${windowIds.size} sessions in the past ${TYPE_RULES.nolepWindowWeeks} weeks (${Math.round((inWindow / windowIds.size) * 100)}%, Nolep needs over ${TYPE_RULES.nolepShare * 100}%).`,
+    };
+    result.set(m.id, { type, played: ids.length, lastPlayed, detail, why: why[type] });
   }
   return result;
+}
+
+export type MemberSort = 'name' | 'sessions' | 'status';
+
+/** Sort members by name, sessions joined, or status (in priority order). */
+export function sortMembers<T extends { id: string; name: string }>(
+  list: T[],
+  types: Map<string, MemberTypeResult>,
+  key: MemberSort,
+  dir: 'asc' | 'desc'
+): T[] {
+  const order = Object.keys(memberTypeInfo);
+  const sign = dir === 'asc' ? 1 : -1;
+  return [...list].sort((a, b) => {
+    const ta = types.get(a.id);
+    const tb = types.get(b.id);
+    const c =
+      key === 'sessions'
+        ? (ta?.played ?? 0) - (tb?.played ?? 0)
+        : key === 'status'
+          ? order.indexOf(ta?.type ?? 'regular') - order.indexOf(tb?.type ?? 'regular')
+          : a.name.localeCompare(b.name);
+    return c * sign || a.name.localeCompare(b.name);
+  });
 }
 
 /** Member types for a group, worked out from its sessions and attendance. */

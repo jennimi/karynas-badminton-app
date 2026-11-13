@@ -79,8 +79,10 @@ Migration files are in `supabase/migrations/` and are numbered sequentially:
 - `002_clean_member_names.sql` — cleans existing names, case-insensitive unique names per group
 - `003_session_courts.sql` — adds `sessions.courts` (number of courts booked)
 - `004_session_payments.sql` — session cost, payment status per participant, admin passcode + functions
-- `005_matchmaking.sql` — Gavin creates this for matches + match_players
-- `006_tournaments.sql` — Gavin creates this for tournament tables
+- `005_chat_import.sql` — `chat_name_map` + `chat_links` for the Chat history page
+- `006_member_fixes.sql` — one-off: Theo before 23 Sep → Theo Budi, merge Nat into Natalie
+- `007_matchmaking.sql` — Gavin creates this for matches + match_players
+- `008_tournaments.sql` — Gavin creates this for tournament tables
 
 ## Payments & admin passcode
 
@@ -95,3 +97,13 @@ There is no login yet, so payments are protected inside the database (see `004_s
   - `set_admin_passcode(group, new, current?)` — first time anyone can set it; afterwards the current one is required.
   - `check_admin_passcode` / `has_admin_passcode` — used by the "Admin" button.
 - Editing a session's participants only adds/removes the difference, so payment statuses are kept.
+
+## Chat history page
+
+`/chat-import` shows the sessions found in the group's WhatsApp chat so past sessions and payments can be
+reviewed and imported. The chat is turned into `src/features/chat-import/data/chatSessions.json` by
+`npm run chat:build -- "<export>.txt"` (only extracted lists/prices/marks are stored; digit strings and links are removed,
+because everything in `src/` is published with the site). Two tables keep it in sync between people:
+
+- `chat_name_map`: who each chat nickname is, optionally "before date X it meant someone else".
+- `chat_links`: which found session became which real session (`session_id`), plus per-session member changes.

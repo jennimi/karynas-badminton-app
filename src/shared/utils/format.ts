@@ -52,6 +52,14 @@ export function relativeDay(dateStr: string): string {
   return diff > 0 ? `In ${diff} days` : `${-diff} days ago`;
 }
 
+/** `dateStr` shifted by `n` days (negative = earlier), as YYYY-MM-DD. */
+export function addDays(dateStr: string, n: number): string {
+  const d = parseDate(dateStr);
+  d.setDate(d.getDate() + n);
+  const pad = (x: number) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 /** "1 court", "3 courts". */
 export function formatCourts(n: number): string {
   return `${n} court${n === 1 ? '' : 's'}`;
