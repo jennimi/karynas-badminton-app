@@ -1,95 +1,96 @@
-import { useState } from 'react';
-import { parseNames } from '../../../shared/utils/nameParser';
+import { ClipboardPaste } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { cn } from '../../../shared/lib/cn';
+import type { Member } from '../../../shared/types';
+import { Button } from '../../../shared/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../shared/ui/card';
+import { Textarea } from '../../../shared/ui/textarea';
+import { matchNames, parseNames } from '../../../shared/utils/nameParser';
 
 interface Props {
+  existing: Member[];
   onBulkAdd: (names: string[]) => Promise<{ added: number; skipped: string[] }>;
   isLoading: boolean;
 }
 
-export default function BulkAddMembers({ onBulkAdd, isLoading }: Props) {
+export default function BulkAddMembers({ existing, onBulkAdd, isLoading }: Props) {
   const [text, setText] = useState('');
-  const [isOpen, setIsOpen] = useState(false);
-  const [result, setResult] = useState<{
-    added: number;
-    skipped: string[];
-  } | null>(null);
+  const [open, setOpen] = useState(false);
 
-  const handleSubmit = async () => {
-    const names = parseNames(text);
-    if (names.length === 0) return;
+  // classify each pasted name as new or already a member
+  const preview = useMemo(() => {
+    const seen = new Set<string>();
+    const names = parseNames(text).filter((n) => {
+      const k = n.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    return matchNames(names, existing).map((r) => ({ name: r.name, isNew: !r.match }));
+  }, [text, existing]);
 
-    const res = await onBulkAdd(names);
-    setResult(res);
-    setText('');
-  };
+  const newNames = preview.filter((p) => p.isNew).map((p) => p.name);
 
-  if (!isOpen) {
+  if (!open) {
     return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="text-sm text-primary hover:underline"
-      >
-        + Bulk add from text
-      </button>
+      <Button variant="secondary" onClick={() => setOpen(true)}>
+        <ClipboardPaste /> Add many from a list
+      </Button>
     );
   }
 
-  const preview = text ? parseNames(text) : [];
+  const submit = async () => {
+    const res = await onBulkAdd(newNames);
+    if (res.added) toast.success(`Added ${res.added} member${res.added === 1 ? '' : 's'} 🎉`);
+    if (res.skipped.length) toast.error(`Couldn’t add: ${res.skipped.join(', ')}`);
+    setText('');
+  };
 
   return (
-    <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-700">
-          Paste a list of names
-        </span>
-        <button
-          onClick={() => {
-            setIsOpen(false);
-            setResult(null);
-          }}
-          className="text-sm text-gray-400 hover:text-gray-600"
-        >
-          ✕
-        </button>
-      </div>
+    <Card className="bg-muted/40">
+      <CardHeader>
+        <CardTitle>Paste a list of names</CardTitle>
+        <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+          Close
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Textarea
+          aria-label="Names to add"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={5}
+          placeholder={'1. Karyna\n2. Gavin ✅\n- Alex\nor: Mia, Budi, Nina'}
+          disabled={isLoading}
+        />
 
-      <textarea
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-          setResult(null);
-        }}
-        placeholder={`Paste names here, e.g.:\n1. Karyna\n2. Gavin\n3. Alex`}
-        rows={5}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
-        disabled={isLoading}
-      />
+        {preview.length > 0 && (
+          <div className="flex flex-wrap gap-2" aria-label="Preview">
+            {preview.map((p) => (
+              <span
+                key={p.name}
+                className={cn(
+                  'rounded-full px-2.5 py-1 text-xs font-bold',
+                  p.isNew ? 'bg-lime-soft text-lime-strong' : 'bg-muted text-muted-foreground line-through'
+                )}
+                title={p.isNew ? 'Will be added' : 'Already a member'}
+              >
+                {p.name}
+              </span>
+            ))}
+          </div>
+        )}
+        {preview.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {newNames.length} new · {preview.length - newNames.length} already members (skipped)
+          </p>
+        )}
 
-      {preview.length > 0 && (
-        <p className="text-xs text-gray-500">
-          Found {preview.length} name{preview.length !== 1 ? 's' : ''}:{' '}
-          {preview.join(', ')}
-        </p>
-      )}
-
-      {result && (
-        <div className="text-sm">
-          <p className="text-green-600">✓ Added {result.added} member{result.added !== 1 ? 's' : ''}</p>
-          {result.skipped.length > 0 && (
-            <p className="text-amber-600">
-              Skipped (already exist): {result.skipped.join(', ')}
-            </p>
-          )}
-        </div>
-      )}
-
-      <button
-        onClick={handleSubmit}
-        disabled={isLoading || preview.length === 0}
-        className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        Add {preview.length} member{preview.length !== 1 ? 's' : ''}
-      </button>
-    </div>
+        <Button onClick={submit} disabled={isLoading || newNames.length === 0}>
+          {isLoading ? 'Adding…' : `Add ${newNames.length} member${newNames.length === 1 ? '' : 's'}`}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

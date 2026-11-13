@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { Check, Pencil, Trash2, X } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
 import type { Member } from '../../../shared/types';
+import { Avatar } from '../../../shared/ui/avatar';
+import { Button } from '../../../shared/ui/button';
+import { Input } from '../../../shared/ui/input';
 
 interface Props {
   members: Member[];
-  onDelete: (id: string) => void;
+  onDelete: (member: Member) => void;
   onRename: (id: string, newName: string) => void;
 }
 
@@ -11,74 +15,70 @@ export default function MemberList({ members, onDelete, onRename }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
-  const startEdit = (member: Member) => {
-    setEditingId(member.id);
-    setEditName(member.name);
+  const startEdit = (m: Member) => {
+    setEditingId(m.id);
+    setEditName(m.name);
   };
 
-  const saveEdit = () => {
-    if (editingId && editName.trim()) {
-      onRename(editingId, editName.trim());
-    }
+  const save = (e: FormEvent, m: Member) => {
+    e.preventDefault();
+    const next = editName.trim();
+    if (next && next !== m.name) onRename(m.id, next);
     setEditingId(null);
   };
 
-  if (members.length === 0) {
-    return (
-      <p className="text-sm text-gray-400 text-center py-8">
-        No members yet. Add some above!
-      </p>
-    );
-  }
-
   return (
-    <div className="space-y-1">
-      <p className="text-xs text-gray-400 mb-2">
-        {members.length} member{members.length !== 1 ? 's' : ''}
-      </p>
-      {members.map((member) => (
-        <div
-          key={member.id}
-          className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 group"
-        >
-          {editingId === member.id ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                saveEdit();
-              }}
-              className="flex-1 flex gap-2"
-            >
-              <input
-                type="text"
+    <ul className="divide-y divide-border">
+      {members.map((m) => (
+        <li key={m.id} className="flex items-center gap-3 px-2 py-2.5">
+          <Avatar name={m.name} />
+          {editingId === m.id ? (
+            <form onSubmit={(e) => save(e, m)} className="flex flex-1 items-center gap-2">
+              <Input
+                aria-label={`Rename ${m.name}`}
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 autoFocus
-                onBlur={saveEdit}
+                className="h-9"
               />
+              <Button type="submit" size="icon" variant="lime" className="size-9" aria-label="Save name">
+                <Check />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-9"
+                aria-label="Cancel"
+                onClick={() => setEditingId(null)}
+              >
+                <X />
+              </Button>
             </form>
           ) : (
             <>
-              <span className="text-sm text-gray-800">{member.name}</span>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => startEdit(member)}
-                  className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => onDelete(member.id)}
-                  className="text-xs text-gray-400 hover:text-danger px-2 py-1"
-                >
-                  Remove
-                </button>
-              </div>
+              <span className="min-w-0 flex-1 truncate font-bold">{m.name}</span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-9"
+                aria-label={`Rename ${m.name}`}
+                onClick={() => startEdit(m)}
+              >
+                <Pencil />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-9 hover:bg-coral-soft hover:text-coral-strong"
+                aria-label={`Remove ${m.name}`}
+                onClick={() => onDelete(m)}
+              >
+                <Trash2 />
+              </Button>
             </>
           )}
-        </div>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }

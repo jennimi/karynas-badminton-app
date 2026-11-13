@@ -1,9 +1,20 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ChevronLeft, Clock, MapPin, Pencil, Swords, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getOrCreateDefaultGroup } from '../groups/api';
-import { getMembers, addMember } from '../members/api';
-import { getSession, updateSession, deleteSession } from './api';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '../../shared/components/ConfirmDialog';
+import { EmptyState } from '../../shared/components/EmptyState';
+import { PageHeader } from '../../shared/components/PageHeader';
+import { Avatar } from '../../shared/ui/avatar';
+import { Badge } from '../../shared/ui/badge';
+import { Button, buttonVariants } from '../../shared/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
+import { Skeleton } from '../../shared/ui/skeleton';
+import { formatDate, formatTimeRange, isUpcoming, relativeDay } from '../../shared/utils/format';
+import { useCurrentGroup } from '../groups/hooks';
+import { addMember, getMembers } from '../members/api';
+import { deleteSession, getSession, updateSession } from './api';
 import SessionForm from './components/SessionForm';
 
 export default function SessionDetailPage() {
@@ -11,194 +22,194 @@ export default function SessionDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const { data: group } = useCurrentGroup();
 
-  const { data: group } = useQuery({
-    queryKey: ['defaultGroup'],
-    queryFn: getOrCreateDefaultGroup,
-  });
-
-  const { data: session, isLoading } = useQuery({
+  const { data: session, isLoading, isError } = useQuery({
     queryKey: ['session', id],
     queryFn: () => getSession(id!),
     enabled: !!id,
   });
-
   const { data: members = [] } = useQuery({
     queryKey: ['members', group?.id],
     queryFn: () => getMembers(group!.id),
     enabled: !!group,
   });
 
+  const refreshLists = () => {
+    queryClient.invalidateQueries({ queryKey: ['sessions'] });
+    queryClient.invalidateQueries({ queryKey: ['upcomingSessions'] });
+    queryClient.invalidateQueries({ queryKey: ['groups'] });
+    queryClient.invalidateQueries({ queryKey: ['attendance'] });
+  };
+
   const updateMutation = useMutation({
-    mutationFn: (data: {
-      title: string;
-      date: string;
-      start_time: string;
-      end_time: string;
-      location: string;
-      notes: string;
-      participant_member_ids: string[];
-    }) => updateSession(id!, data),
+    mutationFn: (data: Parameters<typeof updateSession>[1]) => updateSession(id!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['session', id] });
-      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      refreshLists();
+      toast.success('Session updated');
       setIsEditing(false);
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteSession(id!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sessions'] });
-      navigate('/');
+      refreshLists();
+      toast.success('Session deleted');
+      navigate('/sessions');
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
-  const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('en-GB', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-  };
+  const back = (
+    <Link
+      to="/sessions"
+      className="inline-flex items-center gap-1 rounded-md text-sm font-bold text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      <ChevronLeft className="size-4" /> Sessions
+    </Link>
+  );
 
-  const formatTime = (time: string | null) => {
-    if (!time) return '';
-    const [h, m] = time.split(':');
-    const hour = parseInt(h);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const h12 = hour % 12 || 12;
-    return `${h12}:${m} ${ampm}`;
-  };
-
-  if (isLoading || !session) {
-    return <p className="text-sm text-gray-400 text-center py-12">Loading...</p>;
+  if (isLoading) return <Skeleton className="h-64" />;
+  if (isError || !session) {
+    return (
+      <Card>
+        <EmptyState
+          emoji="🤷"
+          title="Session not found"
+          action={<Link to="/sessions" className={buttonVariants({ variant: 'outline' })}>Back to sessions</Link>}
+        />
+      </Card>
+    );
   }
 
   if (isEditing) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsEditing(false)}
-            className="text-gray-400 hover:text-gray-600 text-sm"
-          >
-            ← Cancel
-          </button>
-          <h2 className="text-xl font-bold text-gray-900">Edit Session</h2>
-        </div>
-
+        {back}
+        <PageHeader title="Edit session" />
         <SessionForm
           members={members}
           initialData={{
             ...session,
             participantIds: session.participants.map((p) => p.member_id),
           }}
+          submitLabel="Save changes"
+          isLoading={updateMutation.isPending}
+          onCancel={() => setIsEditing(false)}
           onSubmit={async (data) => {
-            await updateMutation.mutateAsync(data);
+            await updateMutation.mutateAsync(data).catch(() => undefined);
           }}
           onCreateMember={async (name) => {
             const member = await addMember(group!.id, name);
             queryClient.invalidateQueries({ queryKey: ['members'] });
+            queryClient.invalidateQueries({ queryKey: ['groups'] });
             return member;
           }}
-          submitLabel="Save Changes"
-          isLoading={updateMutation.isPending}
         />
       </div>
     );
   }
 
+  const upcoming = isUpcoming(session.date);
+  const time = formatTimeRange(session.start_time, session.end_time);
+  const people = [...session.participants].sort((a, b) =>
+    a.member.name.localeCompare(b.member.name)
+  );
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => navigate('/')}
-          className="text-gray-400 hover:text-gray-600 text-sm"
-        >
-          ← Sessions
-        </button>
-      </div>
+      {back}
 
-      {/* Session info */}
-      <div className="bg-white rounded-lg border border-gray-200 p-5 space-y-3">
-        <div className="flex items-start justify-between">
-          <h2 className="text-xl font-bold text-gray-900">
-            {session.title || formatDate(session.date)}
-          </h2>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setIsEditing(true)}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              Edit
-            </button>
-            <button
-              onClick={() => {
-                if (window.confirm('Delete this session?')) {
-                  deleteMutation.mutate();
-                }
-              }}
-              className="px-3 py-1.5 text-sm text-danger border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-            >
-              Delete
-            </button>
+      <PageHeader
+        title={session.title || formatDate(session.date, 'long')}
+        description={session.title ? formatDate(session.date, 'long') : undefined}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setIsEditing(true)}>
+              <Pencil /> Edit
+            </Button>
+            <Button variant="danger" onClick={() => setConfirmDelete(true)}>
+              <Trash2 /> Delete
+            </Button>
+          </>
+        }
+      />
+
+      <Card>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={upcoming ? 'lime' : 'neutral'}>
+              {upcoming ? relativeDay(session.date) : 'Finished'}
+            </Badge>
+            {time && (
+              <Badge variant="butter">
+                <Clock className="size-3.5" /> {time}
+              </Badge>
+            )}
+            {session.location && (
+              <Badge variant="brand">
+                <MapPin className="size-3.5" /> {session.location}
+              </Badge>
+            )}
           </div>
-        </div>
-
-        {session.title && (
-          <p className="text-sm text-gray-500">{formatDate(session.date)}</p>
-        )}
-
-        <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-          {session.start_time && (
-            <span>
-              🕐 {formatTime(session.start_time)}
-              {session.end_time && ` – ${formatTime(session.end_time)}`}
-            </span>
+          {session.notes && (
+            <p className="rounded-2xl bg-muted/60 p-3 text-sm">{session.notes}</p>
           )}
-          {session.location && <span>📍 {session.location}</span>}
-        </div>
+        </CardContent>
+      </Card>
 
-        {session.notes && (
-          <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
-            {session.notes}
-          </p>
-        )}
-      </div>
-
-      {/* Participants */}
-      <div className="bg-white rounded-lg border border-gray-200 p-5">
-        <h3 className="font-medium text-gray-900 mb-3">
-          Participants ({session.participants.length})
-        </h3>
-        {session.participants.length === 0 ? (
-          <p className="text-sm text-gray-400">No participants added yet.</p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {session.participants
-              .sort((a, b) => a.member.name.localeCompare(b.member.name))
-              .map((p) => (
-                <span
+      <Card>
+        <CardHeader>
+          <CardTitle>Participants</CardTitle>
+          <Badge variant="brand">{people.length}</Badge>
+        </CardHeader>
+        <CardContent>
+          {people.length === 0 ? (
+            <EmptyState
+              emoji="👥"
+              title="No participants yet"
+              action={
+                <Button size="sm" onClick={() => setIsEditing(true)}>
+                  <Pencil /> Add participants
+                </Button>
+              }
+            />
+          ) : (
+            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {people.map((p) => (
+                <li
                   key={p.id}
-                  className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2"
+                  className="flex items-center gap-3 rounded-2xl border border-border px-3 py-2"
                 >
-                  {p.member.name}
-                </span>
+                  <Avatar name={p.member.name} className="size-8" />
+                  <span className="truncate text-sm font-bold">{p.member.name}</span>
+                </li>
               ))}
-          </div>
-        )}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Gavin: replace this placeholder with <MatchmakingTab sessionId={session.id} /> */}
+      <div className="flex flex-col items-center gap-1 rounded-card border-2 border-dashed border-border p-6 text-center text-muted-foreground">
+        <Swords className="size-6" />
+        <p className="font-bold">Matchups will appear here</p>
+        <p className="text-sm">Randomised teams and scores — coming soon.</p>
       </div>
 
-      {/* Matchmaking placeholder — Gavin's module goes here */}
-      <div className="bg-white rounded-lg border border-dashed border-gray-300 p-5 text-center">
-        <p className="text-sm text-gray-400">
-          🏸 Matchmaking tab will go here (Gavin's module)
-        </p>
-      </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={() => deleteMutation.mutate()}
+        isLoading={deleteMutation.isPending}
+        title="Delete this session?"
+        description="The session and its participant list will be removed. Members themselves are not affected."
+        confirmLabel="Delete session"
+      />
     </div>
   );
 }

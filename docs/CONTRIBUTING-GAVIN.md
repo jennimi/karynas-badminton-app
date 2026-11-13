@@ -47,9 +47,9 @@ Each `Member` has:
 
 ## Where Your Component Plugs In
 
-In `SessionDetailPage.tsx`, there's a placeholder div:
+In `SessionDetailPage.tsx`, there's a dashed placeholder card:
 ```
-🏸 Matchmaking tab will go here (Gavin's module)
+Matchups will appear here — Randomised teams and scores — coming soon.
 ```
 
 Replace it with:
@@ -88,6 +88,13 @@ Session created (Karyna's module)
         → Save matches to DB
         → Record scores
 ```
+
+## Styling & UI (read before building screens)
+
+Use the shared design system — see `docs/DESIGN_SYSTEM.md`. In short:
+- Build UI with `src/shared/ui/*` (Button, Card, Badge, Input, Table…) and colour tokens (`bg-card`, `text-muted-foreground`, `bg-lime-soft`…). No hardcoded colours.
+- Check both light and dark themes and a phone-width window.
+- Need something new? Add it to `shared/` and to the Design kit page (`/design-kit`) rather than styling it locally.
 
 ## Tech Stack Reference
 

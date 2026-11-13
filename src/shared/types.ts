@@ -36,6 +36,17 @@ export interface SessionParticipant {
   created_at: string;
 }
 
+// Group with headline numbers (dashboard cards)
+export interface GroupSummary extends Group {
+  member_count: number;
+  session_count: number;
+}
+
+// Session with how many people are signed up (list views)
+export interface SessionSummary extends Session {
+  participant_count: number;
+}
+
 // Joined type: participant with member info
 export interface ParticipantWithMember extends SessionParticipant {
   member: Member;

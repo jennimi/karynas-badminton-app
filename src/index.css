@@ -1,8 +1,128 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/nunito-sans';
 
-@theme {
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
-  --color-danger: #dc2626;
-  --color-danger-hover: #b91c1c;
+/* Dark mode is class-based: <html class="dark">. See docs/DESIGN_SYSTEM.md */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ==========================================================================
+   Design tokens — "Shuttle Club"
+   Every colour in the app comes from these variables. Do not hardcode hex
+   values in components; use the Tailwind classes they map to (see @theme).
+   ========================================================================== */
+:root {
+  color-scheme: light;
+
+  /* Surfaces & text */
+  --background: #fbf8f3; /* warm off-white page */
+  --foreground: #1f1a2e;
+  --card: #ffffff;
+  --card-foreground: #1f1a2e;
+  --muted: #f3eee6; /* subtle fills, hover states */
+  --muted-foreground: #6b6580; /* secondary text (5.3:1 on card) */
+  --border: #e9e2d6;
+  --ring: #6d4ae0; /* focus outline */
+
+  /* Always-dark text used on top of bright accent fills (7:1+ on all four) */
+  --ink: #1f1a2e;
+
+  /* Accents: fill = the brand colour, soft = pastel background,
+     strong = readable text colour for use on soft/card backgrounds */
+  --brand: #a78bfa; /* Lavender */
+  --brand-soft: #ede6ff;
+  --brand-strong: #6d4ae0;
+
+  --lime: #b9e769; /* Lime Green */
+  --lime-soft: #edf8d6;
+  --lime-strong: #4a7410;
+
+  --butter: #ffd66b; /* Butter Yellow */
+  --butter-soft: #fff3cf;
+  --butter-strong: #865d00;
+
+  --coral: #ff927d; /* Coral */
+  --coral-soft: #ffe4de;
+  --coral-strong: #b03722;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --background: #15111f;
+  --foreground: #f3effa;
+  --card: #1f1a2f;
+  --card-foreground: #f3effa;
+  --muted: #2a2340;
+  --muted-foreground: #aaa3c0;
+  --border: #322a4a;
+  --ring: #c4b0ff;
+
+  --brand: #a78bfa;
+  --brand-soft: #2e2554;
+  --brand-strong: #c9b8ff;
+
+  --lime: #b9e769;
+  --lime-soft: #26321a;
+  --lime-strong: #cdef92;
+
+  --butter: #ffd66b;
+  --butter-soft: #3a3014;
+  --butter-strong: #ffe29a;
+
+  --coral: #ff927d;
+  --coral-soft: #3f2522;
+  --coral-strong: #ffb4a6;
+}
+
+/* Map tokens to Tailwind utilities: bg-card, text-muted-foreground, etc. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-ink: var(--ink);
+
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-strong: var(--brand-strong);
+  --color-lime: var(--lime);
+  --color-lime-soft: var(--lime-soft);
+  --color-lime-strong: var(--lime-strong);
+  --color-butter: var(--butter);
+  --color-butter-soft: var(--butter-soft);
+  --color-butter-strong: var(--butter-strong);
+  --color-coral: var(--coral);
+  --color-coral-soft: var(--coral-soft);
+  --color-coral-strong: var(--coral-strong);
+
+  /* Typography */
+  --font-sans: 'Nunito Sans Variable', ui-sans-serif, system-ui, sans-serif;
+
+  /* Radii */
+  --radius-control: 0.875rem; /* buttons, inputs */
+  --radius-card: 1.25rem; /* cards, panels */
+
+  /* Shadows (soft, low contrast) */
+  --shadow-soft: 0 1px 2px rgb(31 26 46 / 0.04),
+    0 8px 24px -10px rgb(31 26 46 / 0.12);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

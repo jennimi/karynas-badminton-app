@@ -17,7 +17,7 @@ interface Props {
 
 export default function MatchmakingTab({ sessionId: _sessionId }: Props) {
   return (
-    <div className="text-center py-8 text-sm text-gray-400">
+    <div className="py-8 text-center text-sm text-muted-foreground">
       <p>🏸 Matchmaking module</p>
       <p className="mt-1">Gavin: implement randomization and scoring here</p>
     </div>

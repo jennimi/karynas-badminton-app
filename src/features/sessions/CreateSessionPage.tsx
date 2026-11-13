@@ -1,18 +1,19 @@
-import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getOrCreateDefaultGroup } from '../groups/api';
-import { getMembers, addMember } from '../members/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ChevronLeft } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { PageHeader } from '../../shared/components/PageHeader';
+import type { CreateSessionInput } from '../../shared/types';
+import { Skeleton } from '../../shared/ui/skeleton';
+import { useCurrentGroup } from '../groups/hooks';
+import { addMember, getMembers } from '../members/api';
 import { createSession } from './api';
 import SessionForm from './components/SessionForm';
 
 export default function CreateSessionPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const { data: group } = useQuery({
-    queryKey: ['defaultGroup'],
-    queryFn: getOrCreateDefaultGroup,
-  });
+  const { data: group } = useCurrentGroup();
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ['members', group?.id],
@@ -21,59 +22,47 @@ export default function CreateSessionPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: {
-      title: string;
-      date: string;
-      start_time: string;
-      end_time: string;
-      location: string;
-      notes: string;
-      participant_member_ids: string[];
-    }) =>
-      createSession({
-        group_id: group!.id,
-        ...data,
-      }),
+    mutationFn: (data: Omit<CreateSessionInput, 'group_id'>) =>
+      createSession({ group_id: group!.id, ...data }),
     onSuccess: (session) => {
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['upcomingSessions'] });
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      toast.success('Session created 🎉');
       navigate(`/sessions/${session.id}`);
     },
+    onError: (e: Error) => toast.error(e.message),
   });
-
-  if (isLoading) {
-    return <p className="text-sm text-gray-400 text-center py-12">Loading...</p>;
-  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => navigate(-1)}
-          className="text-gray-400 hover:text-gray-600 text-sm"
-        >
-          ← Back
-        </button>
-        <h2 className="text-xl font-bold text-gray-900">New Session</h2>
-      </div>
+      <Link
+        to="/sessions"
+        className="inline-flex items-center gap-1 rounded-md text-sm font-bold text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      >
+        <ChevronLeft className="size-4" /> Sessions
+      </Link>
+      <PageHeader title="New session" description="Set the details and choose who’s playing." />
 
-      {createMutation.isError && (
-        <p className="text-sm text-danger bg-red-50 p-3 rounded-lg">
-          Error: {(createMutation.error as Error).message}
-        </p>
+      {isLoading || !group ? (
+        <Skeleton className="h-96" />
+      ) : (
+        <SessionForm
+          members={members}
+          isLoading={createMutation.isPending}
+          onCancel={() => navigate(-1)}
+          onSubmit={async (data) => {
+            await createMutation.mutateAsync(data).catch(() => undefined);
+          }}
+          onCreateMember={async (name) => {
+            const member = await addMember(group.id, name);
+            queryClient.invalidateQueries({ queryKey: ['members'] });
+            queryClient.invalidateQueries({ queryKey: ['groups'] });
+            return member;
+          }}
+        />
       )}
-
-      <SessionForm
-        members={members}
-        onSubmit={async (data) => {
-          await createMutation.mutateAsync(data);
-        }}
-        onCreateMember={async (name) => {
-          const member = await addMember(group!.id, name);
-          queryClient.invalidateQueries({ queryKey: ['members'] });
-          return member;
-        }}
-        isLoading={createMutation.isPending}
-      />
     </div>
   );
 }

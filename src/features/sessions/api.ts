@@ -1,6 +1,7 @@
 import { supabase } from '../../shared/supabase';
 import type {
   Session,
+  SessionSummary,
   SessionWithParticipants,
   CreateSessionInput,
   UpdateSessionInput,
@@ -16,6 +17,69 @@ export async function getSessions(groupId: string): Promise<Session[]> {
 
   if (error) throw error;
   return data;
+}
+
+/** All sessions of a group (newest first) with a participant count. */
+export async function getSessionSummaries(
+  groupId: string
+): Promise<SessionSummary[]> {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*, session_participants(count)')
+    .eq('group_id', groupId)
+    .order('date', { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []).map((row) => {
+    const { session_participants, ...session } = row as Session & {
+      session_participants: { count: number }[];
+    };
+    return {
+      ...session,
+      participant_count: session_participants?.[0]?.count ?? 0,
+    };
+  });
+}
+
+/** Next upcoming sessions across all groups (dashboard). */
+export async function getUpcomingSessions(
+  today: string,
+  limit = 5
+): Promise<SessionSummary[]> {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*, session_participants(count)')
+    .gte('date', today)
+    .order('date', { ascending: true })
+    .order('start_time', { ascending: true, nullsFirst: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data ?? []).map((row) => {
+    const { session_participants, ...session } = row as Session & {
+      session_participants: { count: number }[];
+    };
+    return {
+      ...session,
+      participant_count: session_participants?.[0]?.count ?? 0,
+    };
+  });
+}
+
+/** Which members attended which session — used for statistics. */
+export async function getAttendance(
+  groupId: string
+): Promise<{ session_id: string; member_id: string }[]> {
+  const { data, error } = await supabase
+    .from('session_participants')
+    .select('session_id, member_id, session:sessions!inner(group_id)')
+    .eq('session.group_id', groupId);
+
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    session_id: r.session_id as string,
+    member_id: r.member_id as string,
+  }));
 }
 
 export async function getSession(
@@ -83,10 +147,18 @@ export async function updateSession(
   // Update session fields (excluding participants)
   const { participant_member_ids, ...sessionFields } = input;
 
-  if (Object.keys(sessionFields).length > 0) {
+  // Optional fields: an empty form value must be stored as NULL
+  // (Postgres rejects '' for time columns).
+  const optional = ['title', 'start_time', 'end_time', 'location', 'notes'] as const;
+  const fields: Record<string, string | null | undefined> = { ...sessionFields };
+  for (const key of optional) {
+    if (key in fields) fields[key] = fields[key] || null;
+  }
+
+  if (Object.keys(fields).length > 0) {
     const { error } = await supabase
       .from('sessions')
-      .update(sessionFields)
+      .update(fields)
       .eq('id', sessionId);
 
     if (error) throw error;
