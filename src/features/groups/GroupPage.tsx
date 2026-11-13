@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import {
   CalendarDays,
   CalendarPlus,
-  ChevronLeft,
   Pencil,
   Search,
   Trophy,
@@ -20,18 +19,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
 import { Input } from '../../shared/ui/input';
 import { Skeleton } from '../../shared/ui/skeleton';
 import { Table, TBody, TD, TH, THead, TR } from '../../shared/ui/table';
-import { isUpcoming } from '../../shared/utils/format';
+import { todayString } from '../../shared/utils/format';
 import { getMembers } from '../members/api';
+import { MemberTypeBadge } from '../members/components/MemberTypeBadge';
+import { useMemberTypes } from '../members/memberType';
 import { getAttendance, getSessionSummaries } from '../sessions/api';
 import { SessionCard } from '../sessions/components/SessionCard';
 import { getGroup } from './api';
 import { GroupDialog } from './components/GroupDialog';
+import { useSyncCurrentGroup } from './hooks';
 
 /** Inside a group: info, upcoming sessions, member statistics and the member list. */
 export default function GroupPage() {
   const { id } = useParams<{ id: string }>();
   const [editing, setEditing] = useState(false);
   const [query, setQuery] = useState('');
+  useSyncCurrentGroup(id);
 
   const { data: group, isLoading, isError } = useQuery({
     queryKey: ['group', id],
@@ -54,6 +57,8 @@ export default function GroupPage() {
     enabled: !!id,
   });
 
+  const types = useMemberTypes(id, members);
+
   const stats = useMemo(() => {
     const counts = new Map<string, number>();
     for (const a of attendance) counts.set(a.member_id, (counts.get(a.member_id) ?? 0) + 1);
@@ -62,24 +67,25 @@ export default function GroupPage() {
       .map((m) => ({ member: m, attended: counts.get(m.id) ?? 0 }))
       .sort((a, b) => b.attended - a.attended || a.member.name.localeCompare(b.member.name));
 
-    const now = new Date();
-    const newThisMonth = members.filter((m) => {
-      const d = new Date(m.created_at);
-      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-    }).length;
+    const newcomers = [...types.values()].filter((t) => t.type === 'newcomer').length;
 
     const withPeople = sessions.filter((s) => s.participant_count > 0);
     const avg = withPeople.length
       ? Math.round(withPeople.reduce((n, s) => n + s.participant_count, 0) / withPeople.length)
       : null;
 
-    return { ranked, newThisMonth, avg, top: ranked[0] };
-  }, [members, sessions, attendance]);
+    return { ranked, newcomers, avg, top: ranked[0] };
+  }, [members, sessions, attendance, types]);
 
-  const upcoming = useMemo(
-    () => sessions.filter((s) => isUpcoming(s.date)).reverse().slice(0, 3),
-    [sessions]
-  );
+  // sessions come newest first
+  const { today, upcoming, past } = useMemo(() => {
+    const t = todayString();
+    return {
+      today: sessions.filter((s) => s.date === t).reverse(),
+      upcoming: sessions.filter((s) => s.date > t).at(-1),
+      past: sessions.find((s) => s.date < t),
+    };
+  }, [sessions]);
   const filtered = stats.ranked.filter((r) =>
     r.member.name.toLowerCase().includes(query.trim().toLowerCase())
   );
@@ -100,13 +106,6 @@ export default function GroupPage() {
 
   return (
     <div className="space-y-8">
-      <Link
-        to="/"
-        className="inline-flex items-center gap-1 rounded-md text-sm font-bold text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      >
-        <ChevronLeft className="size-4" /> All groups
-      </Link>
-
       <Card className="overflow-hidden">
         <div className="h-20 bg-linear-to-r from-brand/70 via-butter/60 to-lime/60" aria-hidden="true" />
         <div className="flex flex-wrap items-end justify-between gap-4 px-5 pb-5">
@@ -141,7 +140,7 @@ export default function GroupPage() {
           icon={CalendarDays}
           tone="lime"
         />
-        <StatCard label="New this month" value={stats.newThisMonth} icon={UserPlus} tone="butter" />
+        <StatCard label="Newcomers" value={stats.newcomers} hint="recently joined" icon={UserPlus} tone="butter" />
         <StatCard
           label="Most active"
           value={stats.top && stats.top.attended > 0 ? stats.top.member.name.split(' ')[0] : '—'}
@@ -154,25 +153,62 @@ export default function GroupPage() {
       <div className="grid gap-6 lg:grid-cols-5">
         <Card className="min-w-0 lg:col-span-3">
           <CardHeader>
-            <CardTitle>Upcoming sessions</CardTitle>
+            <CardTitle>Sessions</CardTitle>
             <Link to="/sessions" className="text-sm font-bold text-brand-strong hover:underline">
               All sessions
             </Link>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {upcoming.length === 0 ? (
-              <EmptyState
-                emoji="🗓️"
-                title="No upcoming sessions"
-                action={
+          <CardContent className="space-y-5">
+            {today.length > 0 && (
+              <section aria-labelledby="today-h" className="space-y-2">
+                <h4 id="today-h" className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider text-coral-strong">
+                  <span className="relative flex size-2">
+                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-coral opacity-75 motion-reduce:animate-none" />
+                    <span className="relative inline-flex size-2 rounded-full bg-coral" />
+                  </span>
+                  Today
+                </h4>
+                {today.map((s) => (
+                  <SessionCard key={s.id} session={s} />
+                ))}
+              </section>
+            )}
+
+            <section aria-labelledby="next-h" className="space-y-2">
+              <h4 id="next-h" className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+                Next up
+              </h4>
+              {upcoming ? (
+                <SessionCard session={upcoming} />
+              ) : (
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-dashed border-border p-3 text-sm text-muted-foreground">
+                  No upcoming sessions
                   <Link to="/sessions/new" className={buttonVariants({ size: 'sm' })}>
                     <CalendarPlus /> New session
                   </Link>
-                }
-              />
-            ) : (
-              upcoming.map((s) => <SessionCard key={s.id} session={s} />)
-            )}
+                </div>
+              )}
+            </section>
+
+            <section aria-labelledby="last-h" className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 id="last-h" className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
+                  Last played
+                </h4>
+                {past && (
+                  <Link to="/sessions?tab=past" className="text-xs font-bold text-brand-strong hover:underline">
+                    All past
+                  </Link>
+                )}
+              </div>
+              {past ? (
+                <SessionCard session={past} />
+              ) : (
+                <p className="rounded-2xl border border-dashed border-border p-3 text-sm text-muted-foreground">
+                  No past sessions yet
+                </p>
+              )}
+            </section>
           </CardContent>
         </Card>
 
@@ -254,9 +290,7 @@ export default function GroupPage() {
                       <div className="flex items-center gap-3">
                         <Avatar name={member.name} />
                         <span className="font-bold">{member.name}</span>
-                        {Date.now() - new Date(member.created_at).getTime() < 30 * 86_400_000 && (
-                          <Badge variant="brand">New</Badge>
-                        )}
+                        <MemberTypeBadge result={types.get(member.id)} />
                       </div>
                     </TD>
                     <TD className="text-right font-semibold">{attended}</TD>

@@ -1,3 +1,4 @@
+import { cleanName } from '../utils/nameParser';
 import { cn } from '../lib/cn';
 
 const tones = [
@@ -15,8 +16,9 @@ function toneFor(name: string) {
 }
 
 function initialsOf(name: string) {
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase();
+  const parts = cleanName(name).split(' ').filter(Boolean);
+  const first = (w?: string) => (w ? Array.from(w)[0] : '');
+  return (first(parts[0]) + first(parts[1])).toUpperCase() || '?';
 }
 
 export function Avatar({
@@ -38,7 +40,7 @@ export function Avatar({
         className
       )}
     >
-      {compact ? initialsOf(name)[0] : initialsOf(name)}
+      {compact ? Array.from(initialsOf(name))[0] : initialsOf(name)}
     </span>
   );
 }

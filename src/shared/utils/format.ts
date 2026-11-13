@@ -52,6 +52,21 @@ export function relativeDay(dateStr: string): string {
   return diff > 0 ? `In ${diff} days` : `${-diff} days ago`;
 }
 
+/** "1 court", "3 courts". */
+export function formatCourts(n: number): string {
+  return `${n} court${n === 1 ? '' : 's'}`;
+}
+
 export function isUpcoming(dateStr: string): boolean {
   return dateStr >= todayString();
+}
+
+/** Currency used for session costs (Indonesian Rupiah). */
+export const CURRENCY_SYMBOL = 'Rp';
+
+const money = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 });
+
+/** "Rp 150.000", "Rp 33.333,333" (Indonesian format, up to 3 decimals). */
+export function formatMoney(amount: number): string {
+  return `${CURRENCY_SYMBOL} ${money.format(amount)}`;
 }

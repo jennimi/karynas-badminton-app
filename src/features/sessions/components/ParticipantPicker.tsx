@@ -3,11 +3,13 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '../../../shared/lib/cn';
 import type { Member } from '../../../shared/types';
+import { Alert } from '../../../shared/ui/alert';
 import { Badge } from '../../../shared/ui/badge';
 import { Button } from '../../../shared/ui/button';
 import { Input } from '../../../shared/ui/input';
 import { Textarea } from '../../../shared/ui/textarea';
 import {
+  dedupeNames,
   matchNames,
   parseNames,
   type NameMatchResult,
@@ -27,7 +29,7 @@ type Decision =
 
 interface ReviewItem {
   result: NameMatchResult;
-  decision?: Decision; // undefined = needs a choice
+  decision: Decision;
 }
 
 export default function ParticipantPicker({
@@ -40,6 +42,7 @@ export default function ParticipantPicker({
   const [showPaste, setShowPaste] = useState(false);
   const [text, setText] = useState('');
   const [review, setReview] = useState<ReviewItem[] | null>(null);
+  const [repeated, setRepeated] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
 
   const filtered = useMemo(() => {
@@ -51,32 +54,26 @@ export default function ParticipantPicker({
     onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
 
   const checkNames = () => {
-    // drop repeated names in the pasted text
-    const seen = new Set<string>();
-    const names = parseNames(text).filter((n) => {
-      const k = n.toLowerCase();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+    // drop repeated names in the pasted text (and remember them for the alert)
+    const { unique: names, repeated: dropped } = dedupeNames(parseNames(text));
+    setRepeated([...new Set(dropped)]);
     if (names.length === 0) return;
 
     setReview(
       matchNames(names, members).map((result) => ({
         result,
+        // Assume the best suggestion; the buttons below let you change it
         decision: result.match
           ? { kind: 'use', memberId: result.match.id }
-          : result.suggestions.length === 0
-            ? { kind: 'create' }
-            : undefined,
+          : result.suggestions.length > 0
+            ? { kind: 'use', memberId: result.suggestions[0].id }
+            : { kind: 'create' },
       }))
     );
   };
 
   const setDecision = (index: number, decision: Decision) =>
     setReview((r) => r && r.map((item, i) => (i === index ? { ...item, decision } : item)));
-
-  const undecided = review?.filter((r) => !r.decision).length ?? 0;
 
   const apply = async () => {
     if (!review) return;
@@ -85,7 +82,7 @@ export default function ParticipantPicker({
     let created = 0;
 
     for (const { result, decision } of review) {
-      if (!decision || decision.kind === 'skip') continue;
+      if (decision.kind === 'skip') continue;
       if (decision.kind === 'use') {
         ids.add(decision.memberId);
       } else if (onCreateMember) {
@@ -211,13 +208,37 @@ export default function ParticipantPicker({
             </>
           ) : (
             <>
+              {repeated.length > 0 && (
+                <Alert>
+                  <p>Listed more than once, counted once: {repeated.join(', ')}</p>
+                </Alert>
+              )}
+              {review.some((r) => r.result.match && selected.includes(r.result.match.id)) && (
+                <Alert tone="info">
+                  <p>
+                    Already in this session (no change):{' '}
+                    {review
+                      .filter((r) => r.result.match && selected.includes(r.result.match.id))
+                      .map((r) => r.result.match!.name)
+                      .join(', ')}
+                  </p>
+                </Alert>
+              )}
               <ul className="space-y-2">
                 {review.map(({ result, decision }, i) => (
                   <li key={result.name + i} className="rounded-xl bg-card p-3 text-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-bold">{result.name}</span>
 
-                      {result.match && <Badge variant="lime">Existing member ✓</Badge>}
+                      {result.match && (
+                        <Badge variant={selected.includes(result.match.id) ? 'butter' : 'lime'}>
+                          {selected.includes(result.match.id)
+                            ? 'Already in this session'
+                            : result.match.name !== result.name
+                              ? `Existing member: ${result.match.name} ✓`
+                              : 'Existing member ✓'}
+                        </Badge>
+                      )}
 
                       {!result.match && result.suggestions.length === 0 && (
                         <div className="flex items-center gap-2">
@@ -236,8 +257,14 @@ export default function ParticipantPicker({
                         </div>
                       )}
 
-                      {!result.match && result.suggestions.length > 0 && !decision && (
-                        <Badge variant="butter">Needs a choice</Badge>
+                      {!result.match && result.suggestions.length > 0 && (
+                        <Badge variant={decision.kind === 'skip' ? 'neutral' : decision.kind === 'create' ? 'brand' : 'butter'}>
+                          {decision.kind === 'use'
+                            ? `Assumed: ${members.find((m) => m.id === decision.memberId)?.name}`
+                            : decision.kind === 'create'
+                              ? 'New member'
+                              : 'Skipped'}
+                        </Badge>
                       )}
                     </div>
 
@@ -247,7 +274,7 @@ export default function ParticipantPicker({
                           <Button
                             key={s.id}
                             size="sm"
-                            variant={decision?.kind === 'use' && decision.memberId === s.id ? 'primary' : 'outline'}
+                            variant={decision.kind === 'use' && decision.memberId === s.id ? 'primary' : 'outline'}
                             onClick={() => setDecision(i, { kind: 'use', memberId: s.id })}
                           >
                             Same as {s.name}
@@ -255,14 +282,14 @@ export default function ParticipantPicker({
                         ))}
                         <Button
                           size="sm"
-                          variant={decision?.kind === 'create' ? 'primary' : 'outline'}
+                          variant={decision.kind === 'create' ? 'primary' : 'outline'}
                           onClick={() => setDecision(i, { kind: 'create' })}
                         >
                           New member
                         </Button>
                         <Button
                           size="sm"
-                          variant={decision?.kind === 'skip' ? 'primary' : 'ghost'}
+                          variant={decision.kind === 'skip' ? 'primary' : 'ghost'}
                           onClick={() => setDecision(i, { kind: 'skip' })}
                         >
                           Skip
@@ -274,17 +301,15 @@ export default function ParticipantPicker({
               </ul>
 
               <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" onClick={apply} disabled={undecided > 0 || applying}>
+                <Button size="sm" onClick={apply} disabled={applying}>
                   {applying ? 'Adding…' : 'Add to session'}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setReview(null)} disabled={applying}>
                   Back
                 </Button>
-                {undecided > 0 && (
-                  <span className="text-xs font-semibold text-butter-strong">
-                    {undecided} name{undecided === 1 ? ' needs' : 's need'} a choice
-                  </span>
-                )}
+                <span className="text-xs text-muted-foreground">
+                  Suggested matches are picked for you. Change any you disagree with.
+                </span>
               </div>
             </>
           )}

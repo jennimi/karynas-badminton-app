@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { CalendarPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { EmptyState } from '../../shared/components/EmptyState';
 import { PageHeader } from '../../shared/components/PageHeader';
 import { buttonVariants } from '../../shared/ui/button';
@@ -13,7 +13,10 @@ import { getSessionSummaries } from './api';
 import { SessionCard } from './components/SessionCard';
 
 export default function SessionsPage() {
-  const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<'upcoming' | 'past'>(
+    params.get('tab') === 'past' ? 'past' : 'upcoming'
+  );
   const { data: group } = useCurrentGroup();
 
   const { data: sessions = [], isLoading } = useQuery({

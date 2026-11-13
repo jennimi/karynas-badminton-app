@@ -1,21 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, Clock, MapPin, Pencil, Swords, Trash2 } from 'lucide-react';
+import { ChevronLeft, Clock, LayoutGrid, MapPin, Pencil, Swords, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../../shared/components/ConfirmDialog';
 import { EmptyState } from '../../shared/components/EmptyState';
 import { PageHeader } from '../../shared/components/PageHeader';
-import { Avatar } from '../../shared/ui/avatar';
 import { Badge } from '../../shared/ui/badge';
 import { Button, buttonVariants } from '../../shared/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
+import { Card, CardContent } from '../../shared/ui/card';
 import { Skeleton } from '../../shared/ui/skeleton';
-import { formatDate, formatTimeRange, isUpcoming, relativeDay } from '../../shared/utils/format';
-import { useCurrentGroup } from '../groups/hooks';
+import { formatCourts, formatDate, formatTimeRange, isUpcoming, relativeDay } from '../../shared/utils/format';
+import { useCurrentGroup, useSyncCurrentGroup } from '../groups/hooks';
 import { addMember, getMembers } from '../members/api';
 import { deleteSession, getSession, updateSession } from './api';
 import SessionForm from './components/SessionForm';
+import { PaymentPanel } from '../payments/components/PaymentPanel';
 
 export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +30,8 @@ export default function SessionDetailPage() {
     queryFn: () => getSession(id!),
     enabled: !!id,
   });
+  // opening a session (e.g. from the dashboard) switches to its group
+  useSyncCurrentGroup(session?.group_id);
   const { data: members = [] } = useQuery({
     queryKey: ['members', group?.id],
     queryFn: () => getMembers(group!.id),
@@ -155,6 +157,12 @@ export default function SessionDetailPage() {
                 <MapPin className="size-3.5" /> {session.location}
               </Badge>
             )}
+            {session.courts && (
+              <Badge variant="coral">
+                <LayoutGrid className="size-3.5" /> {formatCourts(session.courts)}
+                {people.length > 0 && ` · ${(people.length / session.courts).toFixed(1).replace(/\.0$/, '')} players/court`}
+              </Badge>
+            )}
           </div>
           {session.notes && (
             <p className="rounded-2xl bg-muted/60 p-3 text-sm">{session.notes}</p>
@@ -162,37 +170,7 @@ export default function SessionDetailPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Participants</CardTitle>
-          <Badge variant="brand">{people.length}</Badge>
-        </CardHeader>
-        <CardContent>
-          {people.length === 0 ? (
-            <EmptyState
-              emoji="👥"
-              title="No participants yet"
-              action={
-                <Button size="sm" onClick={() => setIsEditing(true)}>
-                  <Pencil /> Add participants
-                </Button>
-              }
-            />
-          ) : (
-            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {people.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex items-center gap-3 rounded-2xl border border-border px-3 py-2"
-                >
-                  <Avatar name={p.member.name} className="size-8" />
-                  <span className="truncate text-sm font-bold">{p.member.name}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <PaymentPanel session={session} onAddParticipants={() => setIsEditing(true)} />
 
       {/* Gavin: replace this placeholder with <MatchmakingTab sessionId={session.id} /> */}
       <div className="flex flex-col items-center gap-1 rounded-card border-2 border-dashed border-border p-6 text-center text-muted-foreground">

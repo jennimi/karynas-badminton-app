@@ -1,9 +1,10 @@
-import { Clock, MapPin, Users } from 'lucide-react';
+import { Clock, LayoutGrid, MapPin, Users, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { SessionSummary } from '../../../shared/types';
 import { cn } from '../../../shared/lib/cn';
 import {
   dateParts,
+  formatCourts,
   formatDate,
   formatTimeRange,
   isUpcoming,
@@ -53,12 +54,28 @@ export function SessionCard({ session }: { session: SessionSummary }) {
               <MapPin className="size-3.5" /> {session.location}
             </span>
           )}
+          {session.courts && (
+            <span className="inline-flex items-center gap-1">
+              <LayoutGrid className="size-3.5" /> {formatCourts(session.courts)}
+            </span>
+          )}
         </p>
       </div>
 
-      <Badge variant={session.participant_count > 0 ? 'brand' : 'neutral'} className="shrink-0">
-        <Users className="size-3.5" /> {session.participant_count}
-      </Badge>
+      <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <Badge variant={session.participant_count > 0 ? 'brand' : 'neutral'}>
+          <Users className="size-3.5" /> {session.participant_count}
+        </Badge>
+        {session.participant_count > 0 && session.total_cost != null && (
+          <Badge
+            variant={session.approved_count === session.participant_count ? 'lime' : 'butter'}
+            aria-label={`${session.approved_count} of ${session.participant_count} paid`}
+            title={`${session.approved_count} approved, ${session.pending_count} waiting approval`}
+          >
+            <Wallet className="size-3.5" /> {session.approved_count}/{session.participant_count}
+          </Badge>
+        )}
+      </div>
     </Link>
   );
 }

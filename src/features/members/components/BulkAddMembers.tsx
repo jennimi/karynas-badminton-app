@@ -6,11 +6,12 @@ import type { Member } from '../../../shared/types';
 import { Button } from '../../../shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../shared/ui/card';
 import { Textarea } from '../../../shared/ui/textarea';
-import { matchNames, parseNames } from '../../../shared/utils/nameParser';
+import { Alert } from '../../../shared/ui/alert';
+import { dedupeNames, matchNames, parseNames } from '../../../shared/utils/nameParser';
 
 interface Props {
   existing: Member[];
-  onBulkAdd: (names: string[]) => Promise<{ added: number; skipped: string[] }>;
+  onBulkAdd: (names: string[]) => Promise<{ added: number; skipped: { name: string; reason: string }[] }>;
   isLoading: boolean;
 }
 
@@ -18,19 +19,21 @@ export default function BulkAddMembers({ existing, onBulkAdd, isLoading }: Props
   const [text, setText] = useState('');
   const [open, setOpen] = useState(false);
 
-  // classify each pasted name as new or already a member
-  const preview = useMemo(() => {
-    const seen = new Set<string>();
-    const names = parseNames(text).filter((n) => {
-      const k = n.toLowerCase();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-    return matchNames(names, existing).map((r) => ({ name: r.name, isNew: !r.match }));
+  // classify each pasted name as new, already a member, or a near-match
+  const { preview, repeated } = useMemo(() => {
+    const { unique, repeated } = dedupeNames(parseNames(text));
+    const preview = matchNames(unique, existing).map((r) => ({
+      name: r.name,
+      isNew: !r.match,
+      existingName: r.match?.name,
+      similar: r.match ? [] : r.suggestions.map((s) => s.name),
+    }));
+    return { preview, repeated };
   }, [text, existing]);
 
   const newNames = preview.filter((p) => p.isNew).map((p) => p.name);
+  const alreadyMembers = preview.filter((p) => !p.isNew);
+  const similarNew = preview.filter((p) => p.isNew && p.similar.length > 0);
 
   if (!open) {
     return (
@@ -43,7 +46,7 @@ export default function BulkAddMembers({ existing, onBulkAdd, isLoading }: Props
   const submit = async () => {
     const res = await onBulkAdd(newNames);
     if (res.added) toast.success(`Added ${res.added} member${res.added === 1 ? '' : 's'} 🎉`);
-    if (res.skipped.length) toast.error(`Couldn’t add: ${res.skipped.join(', ')}`);
+    if (res.skipped.length) toast.error(`Couldn’t add: ${res.skipped.map((x) => x.name).join(', ')}`);
     setText('');
   };
 
@@ -83,8 +86,32 @@ export default function BulkAddMembers({ existing, onBulkAdd, isLoading }: Props
         )}
         {preview.length > 0 && (
           <p className="text-xs text-muted-foreground">
-            {newNames.length} new · {preview.length - newNames.length} already members (skipped)
+            {newNames.length} new · {alreadyMembers.length} already members (skipped)
           </p>
+        )}
+
+        {alreadyMembers.length > 0 && (
+          <Alert>
+            <p>
+              Already members, so they won’t be added again:{' '}
+              {alreadyMembers.map((p) => p.existingName ?? p.name).join(', ')}
+            </p>
+          </Alert>
+        )}
+        {repeated.length > 0 && (
+          <Alert>
+            <p>Listed more than once, counted once: {[...new Set(repeated)].join(', ')}</p>
+          </Alert>
+        )}
+        {similarNew.length > 0 && (
+          <Alert tone="info">
+            {similarNew.map((p) => (
+              <p key={p.name}>
+                “{p.name}” looks similar to {p.similar.join(', ')}. It will be added as a new member. If it’s the
+                same person, remove it from the list.
+              </p>
+            ))}
+          </Alert>
         )}
 
         <Button onClick={submit} disabled={isLoading || newNames.length === 0}>

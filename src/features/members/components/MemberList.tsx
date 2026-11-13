@@ -4,14 +4,17 @@ import type { Member } from '../../../shared/types';
 import { Avatar } from '../../../shared/ui/avatar';
 import { Button } from '../../../shared/ui/button';
 import { Input } from '../../../shared/ui/input';
+import type { MemberTypeResult } from '../memberType';
+import { MemberTypeBadge } from './MemberTypeBadge';
 
 interface Props {
   members: Member[];
+  types: Map<string, MemberTypeResult>;
   onDelete: (member: Member) => void;
   onRename: (id: string, newName: string) => void;
 }
 
-export default function MemberList({ members, onDelete, onRename }: Props) {
+export default function MemberList({ members, types, onDelete, onRename }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
@@ -57,6 +60,7 @@ export default function MemberList({ members, onDelete, onRename }: Props) {
           ) : (
             <>
               <span className="min-w-0 flex-1 truncate font-bold">{m.name}</span>
+              <MemberTypeBadge result={types.get(m.id)} />
               <Button
                 size="icon"
                 variant="ghost"

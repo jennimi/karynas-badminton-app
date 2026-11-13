@@ -7,6 +7,7 @@ import { EmptyState } from '../../shared/components/EmptyState';
 import { PageHeader } from '../../shared/components/PageHeader';
 import type { Member } from '../../shared/types';
 import { Badge } from '../../shared/ui/badge';
+import { cn } from '../../shared/lib/cn';
 import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
 import { Input } from '../../shared/ui/input';
 import { Skeleton } from '../../shared/ui/skeleton';
@@ -15,12 +16,14 @@ import { addMember, addMembersInBulk, deleteMember, getMembers, updateMemberName
 import AddMemberForm from './components/AddMemberForm';
 import BulkAddMembers from './components/BulkAddMembers';
 import MemberList from './components/MemberList';
+import { memberTypeInfo, useMemberTypes, type MemberType } from './memberType';
 
 export default function MembersPage() {
   const queryClient = useQueryClient();
   const { data: group } = useCurrentGroup();
   const [query, setQuery] = useState('');
   const [toRemove, setToRemove] = useState<Member | null>(null);
+  const [typeFilter, setTypeFilter] = useState<MemberType | 'all'>('all');
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ['members', group?.id],
@@ -59,17 +62,23 @@ export default function MembersPage() {
   });
 
   const renameMutation = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => updateMemberName(id, name),
+    mutationFn: ({ id, name }: { id: string; name: string }) => updateMemberName(id, name, group!.id),
     onSuccess: () => {
       refresh();
       toast.success('Name updated');
     },
-    onError: (e: Error) =>
-      toast.error(e.message.includes('duplicate') ? 'That name already exists in this group' : e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
-  const filtered = members.filter((m) =>
-    m.name.toLowerCase().includes(query.trim().toLowerCase())
+  const types = useMemberTypes(group?.id, members);
+  const typeCounts = [...types.values()].reduce(
+    (acc, t) => ({ ...acc, [t.type]: (acc[t.type] ?? 0) + 1 }),
+    {} as Partial<Record<MemberType, number>>
+  );
+  const filtered = members.filter(
+    (m) =>
+      m.name.toLowerCase().includes(query.trim().toLowerCase()) &&
+      (typeFilter === 'all' || types.get(m.id)?.type === typeFilter)
   );
 
   return (
@@ -84,6 +93,7 @@ export default function MembersPage() {
         <CardContent className="space-y-4">
           <h2 className="font-extrabold">Add a member</h2>
           <AddMemberForm
+            existing={members}
             isLoading={addMutation.isPending}
             onAdd={async (name) => {
               await addMutation.mutateAsync(name);
@@ -114,16 +124,41 @@ export default function MembersPage() {
             />
           </div>
         </CardHeader>
+        <div className="flex flex-wrap gap-2 px-5 pb-1" role="group" aria-label="Filter by member type">
+          {(['all', ...Object.keys(memberTypeInfo)] as (MemberType | 'all')[]).map((t) => {
+            const count = t === 'all' ? members.length : (typeCounts[t] ?? 0);
+            const active = typeFilter === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setTypeFilter(t)}
+                title={t === 'all' ? undefined : memberTypeInfo[t].rule}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                  active ? 'bg-brand text-ink' : 'bg-muted text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {t === 'all' ? 'All' : memberTypeInfo[t].label} · {count}
+              </button>
+            );
+          })}
+        </div>
         <CardContent className="px-3 pb-3 pt-2">
           {isLoading || !group ? (
             <Skeleton className="h-40" />
           ) : members.length === 0 ? (
             <EmptyState emoji="👥" title="No members yet" description="Add your first member above." />
           ) : filtered.length === 0 ? (
-            <EmptyState emoji="🔍" title={`No one matches “${query}”`} />
+            <EmptyState
+              emoji="🔍"
+              title={query.trim() ? `No one matches “${query}”` : 'No members of this type'}
+            />
           ) : (
             <MemberList
               members={filtered}
+              types={types}
               onDelete={setToRemove}
               onRename={(id, name) => renameMutation.mutate({ id, name })}
             />

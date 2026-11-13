@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { cn } from '../lib/cn';
 
 /** Label + control (+ optional hint) with correct accessibility wiring. */
 export function Field({
@@ -6,14 +7,16 @@ export function Field({
   htmlFor,
   hint,
   children,
+  className,
 }: {
   label: string;
   htmlFor: string;
   hint?: string;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className={cn('space-y-1.5', className)}>
       <label htmlFor={htmlFor} className="block text-sm font-bold">
         {label}
         {hint && (

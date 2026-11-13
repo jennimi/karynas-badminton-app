@@ -30,7 +30,7 @@ export function GroupDialog({ open, onClose, group, onSaved }: Props) {
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ['groups'] });
       queryClient.invalidateQueries({ queryKey: ['group', saved.id] });
-      queryClient.invalidateQueries({ queryKey: ['defaultGroup'] });
+      queryClient.invalidateQueries({ queryKey: ['currentGroup'] });
       toast.success(group ? 'Group updated' : `${saved.name} created 🎉`);
       onSaved?.(saved);
       onClose();

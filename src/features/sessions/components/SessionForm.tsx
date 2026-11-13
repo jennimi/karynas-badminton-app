@@ -4,6 +4,7 @@ import { Button } from '../../../shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../shared/ui/card';
 import { Field } from '../../../shared/ui/field';
 import { Input } from '../../../shared/ui/input';
+import { todayString } from '../../../shared/utils/format';
 import { Textarea } from '../../../shared/ui/textarea';
 import ParticipantPicker from './ParticipantPicker';
 
@@ -13,6 +14,8 @@ export interface SessionFormData {
   start_time: string;
   end_time: string;
   location: string;
+  /** undefined = not touched (lets the app work before migration 003 is run) */
+  courts?: number | null;
   notes: string;
   participant_member_ids: string[];
 }
@@ -37,10 +40,11 @@ export default function SessionForm({
   isLoading,
 }: Props) {
   const [title, setTitle] = useState(initialData?.title || '');
-  const [date, setDate] = useState(initialData?.date || '');
+  const [date, setDate] = useState(initialData?.date || todayString());
   const [startTime, setStartTime] = useState(initialData?.start_time?.slice(0, 5) || '');
   const [endTime, setEndTime] = useState(initialData?.end_time?.slice(0, 5) || '');
   const [location, setLocation] = useState(initialData?.location || '');
+  const [courts, setCourts] = useState(initialData?.courts ? String(initialData.courts) : '');
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [participantIds, setParticipantIds] = useState<string[]>(
     initialData?.participantIds || []
@@ -54,6 +58,7 @@ export default function SessionForm({
       start_time: startTime,
       end_time: endTime,
       location: location.trim(),
+      courts: courts ? Number(courts) : initialData?.courts ? null : undefined,
       notes: notes.trim(),
       participant_member_ids: participantIds,
     });
@@ -87,14 +92,29 @@ export default function SessionForm({
             </Field>
           </div>
 
-          <Field label="Location" htmlFor="s-location">
-            <Input
-              id="s-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Sports Hall A"
-            />
-          </Field>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Location" htmlFor="s-location" className="sm:col-span-2">
+              <Input
+                id="s-location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. Sports Hall A"
+              />
+            </Field>
+            <Field label="Courts booked" htmlFor="s-courts">
+              <Input
+                id="s-courts"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={50}
+                step={1}
+                value={courts}
+                onChange={(e) => setCourts(e.target.value.replace(/\D/g, ''))}
+                placeholder="e.g. 2"
+              />
+            </Field>
+          </div>
 
           <Field label="Notes" htmlFor="s-notes" hint="(optional)">
             <Textarea

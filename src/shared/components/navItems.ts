@@ -1,5 +1,6 @@
 import {
   CalendarDays,
+  Home,
   LayoutDashboard,
   Swords,
   Trophy,
@@ -21,14 +22,24 @@ export interface NavItem {
  * The single source of truth for app navigation (sidebar + mobile tab bar).
  * Adding a page? Add ONE entry here — don't build a separate menu.
  */
-export const navItems: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, alsoActiveFor: ['/groups'] },
+
+/** Across all groups — shown above the group picker. */
+export const mainNavItems: NavItem[] = [
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+];
+
+/** Pages for the group chosen in the picker — shown below it. */
+export const groupNavItems: NavItem[] = [
+  // `/group` redirects to the current group's page
+  { to: '/group', label: 'Overview', icon: Home, alsoActiveFor: ['/groups'] },
   { to: '/sessions', label: 'Sessions', icon: CalendarDays },
   { to: '/members', label: 'Members', icon: Users },
   // Gavin: set comingSoon to false (and point `to` at your route) when ready.
   { to: '/matches', label: 'Matches', icon: Swords, comingSoon: true },
   { to: '/tournaments', label: 'Tournaments', icon: Trophy, comingSoon: true },
 ];
+
+export const navItems: NavItem[] = [...mainNavItems, ...groupNavItems];
 
 export function isNavActive(item: NavItem, pathname: string): boolean {
   const matches = (prefix: string) =>
