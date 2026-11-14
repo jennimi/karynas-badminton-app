@@ -64,7 +64,7 @@ The stub component already exists at `src/features/matchmaking/MatchmakingTab.ts
 
 ## Creating Your Database Tables
 
-1. Create a new migration file: `supabase/migrations/009_matchmaking.sql`
+1. Matches already exist (`supabase/migrations/009_matches.sql`, see `docs/DATABASE.md`). For anything new, create the next numbered migration file, e.g. `supabase/migrations/012_<your_feature>.sql`
 2. Suggested schema is in `docs/DATABASE.md`
 3. Run the SQL in Supabase Dashboard → SQL Editor
 4. Add corresponding TypeScript types in `src/features/matchmaking/types.ts`

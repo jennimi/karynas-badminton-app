@@ -54,7 +54,13 @@ function SidebarLink({ item, pathname }: { item: NavItem; pathname: string }) {
  * Page frame: sidebar on desktop, top bar + bottom tabs on mobile.
  * `groupSwitcher` is a slot so this shared component stays feature-agnostic.
  */
-export function AppShell({ groupSwitcher }: { groupSwitcher?: ReactNode }) {
+export function AppShell({
+  groupSwitcher,
+  adminControl,
+}: {
+  groupSwitcher?: ReactNode;
+  adminControl?: ReactNode;
+}) {
   useSyncFavicon();
   const { pathname } = useLocation();
   const mobileItems = navItems.filter((n) => !n.comingSoon);
@@ -86,7 +92,7 @@ export function AppShell({ groupSwitcher }: { groupSwitcher?: ReactNode }) {
         </nav>
 
         <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-muted-foreground">Theme</span>
+          {adminControl ?? <span />}
           <ThemeToggle />
         </div>
       </aside>
@@ -94,7 +100,10 @@ export function AppShell({ groupSwitcher }: { groupSwitcher?: ReactNode }) {
       {/* Mobile top bar */}
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-card/90 px-4 py-3 backdrop-blur lg:hidden">
         <Logo />
-        <ThemeToggle />
+        <div className="flex items-center gap-1">
+          {adminControl}
+          <ThemeToggle />
+        </div>
       </header>
       {groupSwitcher && (
         <div className="relative z-10 border-b border-border bg-card px-4 py-2 lg:hidden">{groupSwitcher}</div>

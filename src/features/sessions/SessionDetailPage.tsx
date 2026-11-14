@@ -1,20 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, Clock, LayoutGrid, MapPin, Pencil, Swords, Trash2 } from 'lucide-react';
+import { ChevronLeft, Clock, LayoutGrid, MapPin, Pencil, Swords, Trash2, Users, Wallet } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { RallyLoader } from '../../shared/components/brand/RallyLoader';
 import { ConfirmDialog } from '../../shared/components/ConfirmDialog';
 import { EmptyState } from '../../shared/components/EmptyState';
 import { PageHeader } from '../../shared/components/PageHeader';
+import { StatCard } from '../../shared/components/StatCard';
+import { cn } from '../../shared/lib/cn';
 import { Badge } from '../../shared/ui/badge';
 import { Button, buttonVariants } from '../../shared/ui/button';
-import { Card, CardContent } from '../../shared/ui/card';
+import { Card } from '../../shared/ui/card';
+import { Tabs } from '../../shared/ui/tabs';
 import { formatCourts, formatDate, formatTimeRange, isUpcoming, relativeDay } from '../../shared/utils/format';
 import { useCurrentGroup, useSyncCurrentGroup } from '../groups/hooks';
 import { addMember, getMembers } from '../members/api';
 import { deleteSession, getSession, updateSession } from './api';
 import SessionForm from './components/SessionForm';
+import { getMatches } from '../matchmaking/api';
+import MatchmakingTab from '../matchmaking/MatchmakingTab';
+import { useAdmin } from '../payments/useAdmin';
 import { PaymentPanel } from '../payments/components/PaymentPanel';
 
 export default function SessionDetailPage() {
@@ -23,6 +29,10 @@ export default function SessionDetailPage() {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [params] = useSearchParams();
+  // a shared link (/s/…) opens on Payments: ?tab=payments
+  const linkedTab = params.get('tab') === 'payments' ? 'payments' : params.get('tab') === 'matches' ? 'matches' : null;
+  const [tab, setTab] = useState<'matches' | 'payments' | null>(linkedTab);
   const { data: group } = useCurrentGroup();
 
   const { data: session, isLoading, isError } = useQuery({
@@ -32,6 +42,14 @@ export default function SessionDetailPage() {
   });
   // opening a session (e.g. from the dashboard) switches to its group
   useSyncCurrentGroup(session?.group_id);
+  const admin = useAdmin(session?.group_id);
+  // only for the count in the overview (the Matches card uses the same query)
+  const { data: matches } = useQuery({
+    queryKey: ['matches', id],
+    queryFn: () => getMatches(id!),
+    enabled: !!id,
+    retry: false,
+  });
   const { data: members = [] } = useQuery({
     queryKey: ['members', group?.id],
     queryFn: () => getMembers(group!.id),
@@ -57,13 +75,16 @@ export default function SessionDetailPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteSession(id!),
+    mutationFn: () => deleteSession(id!, admin.code!),
     onSuccess: () => {
       refreshLists();
       toast.success('Session deleted');
       navigate('/sessions');
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      if (/passcode|only the admin/i.test(e.message)) admin.lock();
+      toast.error(e.message);
+    },
   });
 
   const back = (
@@ -118,12 +139,17 @@ export default function SessionDetailPage() {
 
   const upcoming = isUpcoming(session.date);
   const time = formatTimeRange(session.start_time, session.end_time);
-  const people = [...session.participants].sort((a, b) =>
-    a.member.name.localeCompare(b.member.name)
-  );
+  const n = session.participants.length;
+  const approved = session.participants.filter((p) => p.payment_status === 'approved').length;
+  const waiting = session.participants.filter((p) => p.payment_status === 'pending').length;
+  const costSet = session.total_cost != null;
+  // On a phone the two panels are tabs. After the game people come to pay, so open on Payments;
+  // before / during the game open on Matches. On a desktop both are side by side.
+  const activeTab = tab ?? (upcoming ? 'matches' : 'payments');
+  const perCourt = session.courts && n > 0 ? (n / session.courts).toFixed(1).replace(/\.0$/, '') : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {back}
 
       <PageHeader
@@ -134,49 +160,83 @@ export default function SessionDetailPage() {
             <Button variant="outline" onClick={() => setIsEditing(true)}>
               <Pencil /> Edit
             </Button>
-            <Button variant="danger" onClick={() => setConfirmDelete(true)}>
-              <Trash2 /> Delete
-            </Button>
+            {/* deleting is admin only (and the database refuses it for anyone else) */}
+            {admin.isAdmin && (
+              <Button variant="danger" onClick={() => setConfirmDelete(true)}>
+                <Trash2 /> Delete
+              </Button>
+            )}
           </>
         }
       />
 
-      <Card>
-        <CardContent className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={upcoming ? 'lime' : 'neutral'}>
-              {upcoming ? relativeDay(session.date) : 'Finished'}
-            </Badge>
-            {time && (
-              <Badge variant="butter">
-                <Clock className="size-3.5" /> {time}
-              </Badge>
-            )}
-            {session.location && (
-              <Badge variant="brand">
-                <MapPin className="size-3.5" /> {session.location}
-              </Badge>
-            )}
-            {session.courts && (
-              <Badge variant="coral">
-                <LayoutGrid className="size-3.5" /> {formatCourts(session.courts)}
-                {people.length > 0 && ` · ${(people.length / session.courts).toFixed(1).replace(/\.0$/, '')} players/court`}
-              </Badge>
-            )}
-          </div>
-          {session.notes && (
-            <p className="rounded-2xl bg-muted/60 p-3 text-sm">{session.notes}</p>
-          )}
-        </CardContent>
-      </Card>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={upcoming ? 'lime' : 'neutral'}>{upcoming ? relativeDay(session.date) : 'Finished'}</Badge>
+        {time && (
+          <Badge variant="butter">
+            <Clock className="size-3.5" /> {time}
+          </Badge>
+        )}
+        {session.location && (
+          <Badge variant="brand">
+            <MapPin className="size-3.5" /> {session.location}
+          </Badge>
+        )}
+      </div>
+      {session.notes && <p className="rounded-2xl bg-muted/60 p-3 text-sm">{session.notes}</p>}
 
-      <PaymentPanel session={session} onAddParticipants={() => setIsEditing(true)} />
+      <section aria-label="Session overview" className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        <StatCard
+          label="Players"
+          value={n}
+          hint={perCourt ? `${perCourt} per court` : undefined}
+          icon={Users}
+          tone="brand"
+        />
+        <StatCard
+          label="Courts"
+          value={session.courts ?? '—'}
+          hint={session.courts ? formatCourts(session.courts) + ' booked' : 'not set'}
+          icon={LayoutGrid}
+          tone="coral"
+        />
+        <StatCard
+          label="Paid"
+          value={costSet && n > 0 ? `${approved}/${n}` : '—'}
+          hint={!costSet ? 'cost not set' : waiting > 0 ? `${waiting} waiting` : 'approved'}
+          icon={Wallet}
+          tone="lime"
+        />
+        <StatCard
+          label="Matches"
+          value={matches ? matches.length : '—'}
+          hint={matches && matches.length > 0 ? 'played' : 'none yet'}
+          icon={Swords}
+          tone="butter"
+        />
+      </section>
 
-      {/* Gavin: replace this placeholder with <MatchmakingTab sessionId={session.id} /> */}
-      <div className="flex flex-col items-center gap-1 rounded-card border-2 border-dashed border-border p-6 text-center text-muted-foreground">
-        <Swords className="size-6" />
-        <p className="font-bold">Matchups will appear here</p>
-        <p className="text-sm">Randomised teams and scores — coming soon.</p>
+      {/* phone: switch between the two panels (so neither is buried at the bottom) */}
+      <div className="lg:hidden">
+        <Tabs
+          label="Session sections"
+          value={activeTab}
+          onChange={setTab}
+          options={[
+            { value: 'matches', label: 'Matches', count: matches?.length },
+            { value: 'payments', label: 'Payments', count: n },
+          ]}
+        />
+      </div>
+
+      {/* desktop: matches (main) next to payments */}
+      <div className="grid items-start gap-6 lg:grid-cols-5">
+        <div className={cn(activeTab === 'matches' ? 'block' : 'hidden', 'min-w-0 lg:col-span-3 lg:block')}>
+          <MatchmakingTab session={session} />
+        </div>
+        <div className={cn(activeTab === 'payments' ? 'block' : 'hidden', 'min-w-0 lg:col-span-2 lg:block')}>
+          <PaymentPanel session={session} onAddParticipants={() => setIsEditing(true)} />
+        </div>
       </div>
 
       <ConfirmDialog
@@ -185,7 +245,7 @@ export default function SessionDetailPage() {
         onConfirm={() => deleteMutation.mutate()}
         isLoading={deleteMutation.isPending}
         title="Delete this session?"
-        description="The session and its participant list will be removed. Members themselves are not affected."
+        description="The session, its participants, payments and matches will be removed. Members themselves are not affected."
         confirmLabel="Delete session"
       />
     </div>

@@ -1,4 +1,5 @@
 import { supabase } from '../../shared/supabase';
+import { friendlyRpcError } from '../../shared/utils/rpcError';
 import type {
   Session,
   SessionSummary,
@@ -193,13 +194,10 @@ export async function updateSession(
   }
 }
 
-export async function deleteSession(sessionId: string): Promise<void> {
-  const { error } = await supabase
-    .from('sessions')
-    .delete()
-    .eq('id', sessionId);
-
-  if (error) throw error;
+/** Admin only: the database checks the passcode (supabase/migrations/010_admin_deletes.sql). */
+export async function deleteSession(sessionId: string, adminCode: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_session', { p_session: sessionId, p_code: adminCode });
+  if (error) throw friendlyRpcError(error.message, '010_admin_deletes.sql');
 }
 
 /**

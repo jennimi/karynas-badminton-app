@@ -1,4 +1,5 @@
 import { supabase } from '../../shared/supabase';
+import { friendlyRpcError } from '../../shared/utils/rpcError';
 import type { Member } from '../../shared/types';
 import { cleanName, nameKey } from '../../shared/utils/nameParser';
 
@@ -77,13 +78,10 @@ export async function addMembersInBulk(
   return { added, skipped };
 }
 
-export async function deleteMember(memberId: string): Promise<void> {
-  const { error } = await supabase
-    .from('members')
-    .delete()
-    .eq('id', memberId);
-
-  if (error) throw error;
+/** Admin only: the database checks the passcode (supabase/migrations/010_admin_deletes.sql). */
+export async function deleteMember(memberId: string, adminCode: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_member', { p_member: memberId, p_code: adminCode });
+  if (error) throw friendlyRpcError(error.message, '010_admin_deletes.sql');
 }
 
 export async function updateMemberName(

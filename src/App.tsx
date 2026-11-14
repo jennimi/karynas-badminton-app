@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import DashboardPage from './features/dashboard/DashboardPage';
 import DesignKitPage from './features/dashboard/DesignKitPage';
 import GroupPage from './features/groups/GroupPage';
 import ChatImportPage from './features/chat-import/ChatImportPage';
 import { GroupSwitcher } from './features/groups/components/GroupSwitcher';
 import { useCurrentGroup } from './features/groups/hooks';
+import { AdminToggle } from './features/payments/components/AdminToggle';
 import MembersPage from './features/members/MembersPage';
 import CreateSessionPage from './features/sessions/CreateSessionPage';
 import SessionDetailPage from './features/sessions/SessionDetailPage';
@@ -13,6 +14,8 @@ import SessionsPage from './features/sessions/SessionsPage';
 import { AppShell } from './shared/components/AppShell';
 import { ThemeProvider } from './shared/theme/ThemeProvider';
 import { RallyLoader } from './shared/components/brand/RallyLoader';
+import { EmptyState } from './shared/components/EmptyState';
+import { decodeSessionId } from './features/payments/shareMessage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,6 +25,17 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+/** `/s/<code>`: the compact link people share. The code is the session id written shorter. */
+function ShortSessionRedirect() {
+  const { code = '' } = useParams();
+  const id = decodeSessionId(code);
+  return id ? (
+    <Navigate to={`/sessions/${id}?tab=payments`} replace />
+  ) : (
+    <EmptyState emoji="🤷" title="This link doesn’t look right" description="Ask for the link to be shared again." />
+  );
+}
 
 /** `/group` → the page of the group picked in the sidebar. */
 function CurrentGroupRedirect() {
@@ -40,7 +54,7 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <Routes>
-            <Route element={<AppShell groupSwitcher={<GroupSwitcher />} />}>
+            <Route element={<AppShell groupSwitcher={<GroupSwitcher />} adminControl={<AdminToggle />} />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/group" element={<CurrentGroupRedirect />} />
               <Route path="/groups/:id" element={<GroupPage />} />
@@ -48,6 +62,7 @@ export default function App() {
               <Route path="/sessions/new" element={<CreateSessionPage />} />
               <Route path="/sessions/:id" element={<SessionDetailPage />} />
               <Route path="/members" element={<MembersPage />} />
+              <Route path="/s/:code" element={<ShortSessionRedirect />} />
               <Route path="/chat-import" element={<ChatImportPage />} />
               {/* Developer reference for the shared components */}
               <Route path="/design-kit" element={<DesignKitPage />} />

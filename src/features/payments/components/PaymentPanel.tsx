@@ -7,8 +7,7 @@ import {
   LockOpen,
   Pencil,
   RotateCcw,
-  Undo2,
-} from "lucide-react";
+  Undo2, Search, Share2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
@@ -32,6 +31,7 @@ import { CURRENCY_SYMBOL, formatCost } from "../../../shared/utils/format";
 import { bulkSetPaymentStatus, setPaymentStatus, setSessionCost } from "../api";
 import { useAdmin } from "../useAdmin";
 import { AdminDialog } from "./AdminDialog";
+import { ShareDialog } from "./ShareDialog";
 
 const statusInfo: Record<
   PaymentStatus,
@@ -59,6 +59,9 @@ export function PaymentPanel({
   const [editingCost, setEditingCost] = useState(false);
   const [costInput, setCostInput] = useState("");
   const [confirmReset, setConfirmReset] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [filter, setFilter] = useState<"all" | PaymentStatus>("all");
+  const [query, setQuery] = useState("");
 
   const people = [...session.participants].sort((a, b) =>
     a.member.name.localeCompare(b.member.name),
@@ -70,6 +73,20 @@ export function PaymentPanel({
   const share = costSet && n > 0 ? total / n : null;
   const approved = people.filter((p) => p.payment_status === "approved").length;
   const pending = people.filter((p) => p.payment_status === "pending").length;
+  const unpaid = n - approved - pending;
+  // once payments are open, people who still need to pay come first
+  const rank: Record<PaymentStatus, number> = { unpaid: 0, pending: 1, approved: 2 };
+  const visible = people
+    .filter((p) => filter === "all" || (p.payment_status ?? "unpaid") === filter)
+    .filter((p) =>
+      p.member.name.toLowerCase().includes(query.trim().toLowerCase()),
+    )
+    .sort((a, b) =>
+      costSet
+        ? rank[a.payment_status ?? "unpaid"] - rank[b.payment_status ?? "unpaid"] ||
+          a.member.name.localeCompare(b.member.name)
+        : 0,
+    );
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["session", session.id] });
@@ -147,19 +164,27 @@ export function PaymentPanel({
         <CardTitle className="flex items-center gap-2">
           Participants & payments <Badge variant="brand">{n}</Badge>
         </CardTitle>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* available once the admin has set the price, and from then on */}
+          {costSet && n > 0 && (
+            <Button size="sm" variant="primary" onClick={() => setSharing(true)}>
+              <Share2 /> Share
+            </Button>
+          )}
         {admin.isAdmin ? (
-          <Button size="sm" variant="secondary" onClick={admin.lock}>
-            <LockOpen /> Admin on · Lock
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setUnlocking(true)}
-          >
-            <Lock /> Admin
-          </Button>
-        )}
+            <Button size="sm" variant="secondary" onClick={admin.lock}>
+              <LockOpen /> Admin on · Lock
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setUnlocking(true)}
+            >
+              <Lock /> Admin
+            </Button>
+          )}
+        </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -304,8 +329,54 @@ export function PaymentPanel({
             }
           />
         ) : (
-          <ul className="divide-y divide-border">
-            {people.map((p) => {
+          <div className="space-y-3">
+            {(costSet || n > 6) && (
+              <div className="flex flex-wrap items-center gap-2">
+                {costSet &&
+                  (
+                    [
+                      ["all", "All", n],
+                      ["unpaid", "Not paid", unpaid],
+                      ["pending", "Waiting", pending],
+                      ["approved", "Approved", approved],
+                    ] as const
+                  ).map(([value, label, count]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={filter === value}
+                      onClick={() => setFilter(value)}
+                      className={cn(
+                        "rounded-full px-3 py-1 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                        filter === value
+                          ? "bg-brand text-ink"
+                          : "bg-muted text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {label} · {count}
+                    </button>
+                  ))}
+                {n > 6 && (
+                  <div className="relative min-w-36 flex-1">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      aria-label="Search participants"
+                      placeholder="Find your name…"
+                      className="h-9 pl-8"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            <ul className="max-h-[26rem] divide-y divide-border overflow-y-auto pr-1">
+              {visible.length === 0 && (
+                <li className="py-6 text-center text-sm text-muted-foreground">
+                  No one here.
+                </li>
+              )}
+              {visible.map((p) => {
               const status = p.payment_status ?? "unpaid";
               const info = statusInfo[status];
               const busy = busyId === p.id;
@@ -315,7 +386,7 @@ export function PaymentPanel({
               return (
                 <li
                   key={p.id}
-                  className="flex flex-wrap items-center gap-3 py-2.5"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2"
                 >
                   {/* the tick box: members tick themselves off as paid */}
                   {costSet && (
@@ -358,15 +429,10 @@ export function PaymentPanel({
                       )}
                     </button>
                   )}
-                  <Avatar name={p.member.name} className="size-8" />
+                  <Avatar name={p.member.name} className="size-7 text-[11px]" />
                   <span className="min-w-0 flex-1 truncate text-sm font-bold">
                     {p.member.name}
                   </span>
-                  {share != null && (
-                    <span className="text-sm font-semibold text-muted-foreground">
-                      {formatCost(share)}
-                    </span>
-                  )}
                   {costSet && (
                     <Badge variant={info.variant}>{info.label}</Badge>
                   )}
@@ -393,7 +459,8 @@ export function PaymentPanel({
                 </li>
               );
             })}
-          </ul>
+            </ul>
+          </div>
         )}
       </CardContent>
 
@@ -406,6 +473,8 @@ export function PaymentPanel({
         description={`${approved} approved and ${pending} waiting payment${approved + pending === 1 ? "" : "s"} will go back to “Not paid”. Members will need to tick themselves off again.`}
         confirmLabel="Reset to not paid"
       />
+
+      {sharing && <ShareDialog session={session} onClose={() => setSharing(false)} />}
 
       {unlocking && (
         <AdminDialog

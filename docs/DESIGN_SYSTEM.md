@@ -116,6 +116,7 @@ personality (group emoji, empty states, greetings) but never as the only carrier
 | `/groups/:id` | Group — info (edit), member statistics, top attendance, member list |
 | `/sessions`, `/sessions/new`, `/sessions/:id` | Session list (Upcoming/Past), create, detail + edit + delete |
 | `/members` | Add (single / pasted list), rename, remove members |
+| `/s/:code` | Compact share link: the code is a session id written in 22 characters (`features/payments/shareMessage.ts`); opens that session on its Payments tab |
 | `/design-kit` | Reference of shared components |
 
 The "current group" (used by Sessions and Members) comes from `useCurrentGroup()` in `features/groups/hooks.ts`.

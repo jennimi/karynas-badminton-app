@@ -8,13 +8,15 @@ interface DialogProps {
   title: string;
   description?: string;
   children: ReactNode;
+  /** Roomier pop-up for forms with more to choose from. */
+  wide?: boolean;
 }
 
 /**
  * Modal built on the native <dialog> element: focus trap, Esc to close and
  * a backdrop come from the browser, so we need no extra library.
  */
-export function Dialog({ open, onClose, title, description, children }: DialogProps) {
+export function Dialog({ open, onClose, title, description, children, wide }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -32,7 +34,7 @@ export function Dialog({ open, onClose, title, description, children }: DialogPr
         // click on the backdrop (the dialog element itself) closes it
         if (e.target === ref.current) onClose();
       }}
-      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-card border border-border bg-card p-0 text-card-foreground shadow-soft backdrop:bg-ink/50 backdrop:backdrop-blur-sm"
+      className={`m-auto w-[calc(100%-2rem)] ${wide ? 'max-w-2xl' : 'max-w-md'} rounded-card border border-border bg-card p-0 text-card-foreground shadow-soft backdrop:bg-ink/50 backdrop:backdrop-blur-sm`}
     >
       {open && (
         <div className="p-6">

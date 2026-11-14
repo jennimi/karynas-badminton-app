@@ -1,28 +1,22 @@
-/**
- * Matchmaking types — Gavin's module
- *
- * These define the shape of matchmaking data.
- * The shared types (Member, Session, etc.) live in src/shared/types.ts.
- */
+/** Matches inside a session. The base types live in src/shared/types.ts. */
+import type { Match, MatchPlayer } from '../../shared/types';
 
-export interface Match {
-  id: string;
-  session_id: string;
-  round: number;
-  court: number | null;
-  created_at: string;
-}
+export type { Match, MatchPlayer };
+export type Team = 'A' | 'B';
 
-export interface MatchPlayer {
-  id: string;
-  match_id: string;
-  member_id: string;
-  team: 'A' | 'B';
-  score: number | null;
+export interface MatchPlayerWithMember extends MatchPlayer {
+  member: { id: string; name: string };
 }
 
 export interface MatchWithPlayers extends Match {
-  players: (MatchPlayer & { member_name: string })[];
+  players: MatchPlayerWithMember[];
+}
+
+/** What the "add / edit match" pop-up saves. */
+export interface MatchInput {
+  court: number | null;
+  teamA: string[]; // member ids
+  teamB: string[];
   score_a: number | null;
   score_b: number | null;
 }

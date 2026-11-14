@@ -47,30 +47,30 @@
 
 **Constraint:** `UNIQUE(session_id, member_id)` — a member can only be added to a session once.
 
-## Future Tables (Gavin)
+## Matches (in a session)
 
-### `matches` (matchmaking)
-```sql
-create table matches (
-  id uuid primary key default gen_random_uuid(),
-  session_id uuid not null references sessions(id) on delete cascade,
-  round integer not null,
-  court integer,
-  created_at timestamptz not null default now()
-);
-```
+Created by `009_matches.sql`. Used by `src/features/matchmaking/` (the "Matches" card on a session page).
 
-### `match_players` (matchmaking)
-```sql
-create table match_players (
-  id uuid primary key default gen_random_uuid(),
-  match_id uuid not null references matches(id) on delete cascade,
-  member_id uuid not null references members(id) on delete cascade,
-  team text not null check (team in ('A', 'B')),
-  score integer,
-  unique(match_id, member_id)
-);
-```
+### `matches`
+| Column     | Type        | Notes                                              |
+|------------|-------------|----------------------------------------------------|
+| id         | uuid (PK)   | Auto-generated                                     |
+| session_id | uuid (FK)   | → sessions.id, cascade delete                      |
+| round      | integer     | Game number within the session (1, 2, 3…)          |
+| court      | integer     | Optional court number                              |
+| score_a    | integer     | Team A's score; empty until the game is finished   |
+| score_b    | integer     | Team B's score                                     |
+| created_at | timestamptz | Auto-generated                                     |
+
+### `match_players`
+| Column    | Type      | Notes                                   |
+|-----------|-----------|-----------------------------------------|
+| id        | uuid (PK) | Auto-generated                          |
+| match_id  | uuid (FK) | → matches.id, cascade delete            |
+| member_id | uuid (FK) | → members.id, cascade delete            |
+| team      | text      | `A` or `B`. Two per team = doubles, one = singles |
+
+**Constraint:** `UNIQUE(match_id, member_id)`. Access is open like sessions (no login yet).
 
 ## Migrations
 
@@ -83,8 +83,9 @@ Migration files are in `supabase/migrations/` and are numbered sequentially:
 - `006_member_fixes.sql` — one-off: Theo before 23 Sep → Theo Budi, merge Nat into Natalie
 - `007_app_settings.sql` — `app_settings` (which Rally icon the app uses) + admin-only `set_app_icon()`
 - `008_costs_in_thousands.sql` — one-off: `sessions.total_cost` 206000 → 206 (costs are in thousands of Rupiah from now on)
-- `009_matchmaking.sql` — Gavin creates this for matches + match_players
-- `010_tournaments.sql` — Gavin creates this for tournament tables
+- `009_matches.sql` — `matches` + `match_players` (who played whom in a session, and the score)
+- `010_admin_deletes.sql` — deleting sessions / members / matches is admin-only (`delete_session`, `delete_member`, `delete_match`), plus `create_match`
+- `011_tournaments.sql` — Gavin creates this for tournament tables
 
 ## Payments & admin passcode
 
@@ -109,3 +110,12 @@ because everything in `src/` is published with the site). Two tables keep it in 
 
 - `chat_name_map`: who each chat nickname is, optionally "before date X it meant someone else".
 - `chat_links`: which found session became which real session (`session_id`), plus per-session member changes.
+
+## Admin-only deletes
+
+From `010_admin_deletes.sql`, direct `DELETE` on `sessions`, `members` and `matches` is switched off for the app.
+The only way to delete is through functions that check the group's admin passcode in the database:
+`delete_session(session, code)`, `delete_member(member, code)`, `delete_match(match, code)`.
+The buttons only show in admin mode (the "Admin" button in the sidebar / phone header). Removing someone from a session,
+or editing a match, is not a delete and stays open to everyone. `create_match(...)` creates a match and its players in one step
+(it replaced a delete-on-failure clean-up that is no longer allowed).

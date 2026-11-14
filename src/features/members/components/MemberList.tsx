@@ -10,7 +10,8 @@ import { MemberTypeBadge } from './MemberTypeBadge';
 interface Props {
   members: Member[];
   types: Map<string, MemberTypeResult>;
-  onDelete: (member: Member) => void;
+  /** Only given to admins: without it, the Remove button isn't shown. */
+  onDelete?: (member: Member) => void;
   onRename: (id: string, newName: string) => void;
 }
 
@@ -84,6 +85,7 @@ export default function MemberList({ members, types, onDelete, onRename }: Props
               >
                 <Pencil />
               </Button>
+              {onDelete && (
               <Button
                 size="icon"
                 variant="ghost"
@@ -93,6 +95,7 @@ export default function MemberList({ members, types, onDelete, onRename }: Props
               >
                 <Trash2 />
               </Button>
+              )}
             </>
           )}
         </li>

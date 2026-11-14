@@ -69,14 +69,18 @@ export interface SessionWithParticipants extends Session {
 }
 
 // ============================================
-// Gavin's types — stubs for matchmaking
+// Matches inside a session (see features/matchmaking)
 // ============================================
 
 export interface Match {
   id: string;
   session_id: string;
+  /** game number within the session: 1, 2, 3… */
   round: number;
   court: number | null;
+  /** one score per team, e.g. 21 and 18; null until the game is finished */
+  score_a: number | null;
+  score_b: number | null;
   created_at: string;
 }
 
@@ -85,7 +89,6 @@ export interface MatchPlayer {
   match_id: string;
   member_id: string;
   team: 'A' | 'B';
-  score: number | null;
 }
 
 // Input for creating a session

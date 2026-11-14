@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
 import { Input } from '../../shared/ui/input';
 import { Skeleton } from '../../shared/ui/skeleton';
 import { useCurrentGroup } from '../groups/hooks';
+import { useAdmin } from '../payments/useAdmin';
 import { addMember, addMembersInBulk, deleteMember, getMembers, updateMemberName } from './api';
 import AddMemberForm from './components/AddMemberForm';
 import BulkAddMembers from './components/BulkAddMembers';
@@ -23,6 +24,7 @@ import { memberTypeInfo, sortMembers, useMemberTypes, type MemberSort, type Memb
 export default function MembersPage() {
   const queryClient = useQueryClient();
   const { data: group } = useCurrentGroup();
+  const admin = useAdmin(group?.id);
   const [query, setQuery] = useState('');
   const [toRemove, setToRemove] = useState<Member | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -57,13 +59,16 @@ export default function MembersPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (m: Member) => deleteMember(m.id),
+    mutationFn: (m: Member) => deleteMember(m.id, admin.code!),
     onSuccess: () => {
       refresh();
       toast.success('Member removed');
       setToRemove(null);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      if (/passcode|only the admin/i.test(e.message)) admin.lock();
+      toast.error(e.message);
+    },
   });
 
   const renameMutation = useMutation({
@@ -235,7 +240,7 @@ export default function MembersPage() {
             <MemberList
               members={filtered}
               types={types}
-              onDelete={setToRemove}
+              onDelete={admin.isAdmin ? setToRemove : undefined}
               onRename={(id, name) => renameMutation.mutate({ id, name })}
             />
           )}
