@@ -27,3 +27,6 @@ dist-ssr
 # Exported chats contain other people's messages: never commit
 _chat*.txt
 *.chat.json
+
+# Gavin's adds
+.agents/
