@@ -1,4 +1,4 @@
-# Design System — "Shuttle Club"
+# Design System — "Rally"
 
 Playful, modern, friendly. Rounded cards, pastel surfaces, strong accents,
 light **and** dark themes. This file is the rule book for both developers:
@@ -81,7 +81,10 @@ Focus is always visible (`focus-visible` outline using `ring`). Motion is disabl
 | `Tabs` | `shared/ui/tabs.tsx` | Segmented control (Upcoming / Past) |
 | `Avatar`, `AvatarStack` | `shared/ui/avatar.tsx` | Colour is derived from the name |
 | `Table`, `THead`, `TBody`, `TR`, `TH`, `TD` | `shared/ui/table.tsx` | Scrolls horizontally on mobile |
-| `Skeleton` | `shared/ui/skeleton.tsx` | Loading placeholder |
+| `Skeleton` | `shared/ui/skeleton.tsx` | Small loading placeholder inside a layout |
+| `RallyLogo`, `RallyMark` | `shared/components/brand/RallyLogo.tsx` | The app icon (icon, or icon + the word Rally). `motion`: `none` / `hover` (one hop while hovered) / `loop`. Shows whichever icon is chosen (see Brand below) |
+| `RallyLoader` | `shared/components/brand/RallyLoader.tsx` | Page-sized loading screen: the icon hopping over a shadow + a message. Use it when a whole page is waiting; keep `Skeleton` for small placeholders |
+| `IconPicker` | `shared/components/brand/IconPicker.tsx` | Choose which of the 12 icons the app uses (on `/design-kit`, admin passcode to save) |
 | `Toaster` + `toast()` | `shared/ui/sonner.tsx` | `import { toast } from 'sonner'` — success/error messages (mounted once in `AppShell`) |
 | `StatCard` | `shared/components/StatCard.tsx` | Number + label + icon tile |
 | `PageHeader` | `shared/components/PageHeader.tsx` | Page title + description + action buttons |
@@ -124,3 +127,20 @@ Today that is the first group; changing it there will switch every page when mul
 - **Accent token is named `brand`** (lavender), not `primary`.
 - **Dark mode is class-based** (`.dark` on `<html>`), applied by a tiny inline script in `index.html` before first paint to prevent a flash.
 - **Recharts** is deferred until real statistics exist; the "Top attendance" bars are plain CSS for now.
+
+## Brand: Rally
+The name comes from a badminton *rally*: the back-and-forth exchange of shots. The icon is one of 12 shuttlecock
+tiles (`design/Rally Shuttlecock Icon Collection.png`), cut out by `python3 scripts/extract-brand-icons.py` into
+`public/brand/rally-01.png … rally-12.png`.
+
+**Changing the icon:** open `/design-kit`, click an icon in "Rally icon" to preview it (light + dark, as the logo,
+hopping, and tiny), unlock admin, then **Use for everyone**. It's saved in the `app_settings` table (migration
+`007_app_settings.sql`; only `set_app_icon()` with the admin passcode can write it) and drives the sidebar logo, the
+loading screens, the browser-tab icon and the loading splash. Until one is chosen the app uses `DEFAULT_ICON`
+in `shared/components/brand/rallyIcons.ts`.
+
+**Motion:** the icon is a flat picture, so it moves with a squash-and-stretch hop (`rally.css`): on hover in the
+sidebar, and looping in `RallyLoader`. Switched off for `prefers-reduced-motion`.
+
+**Adding or replacing icons:** drop a new collection image into `design/`, adjust the grid in
+`extract-brand-icons.py` if the layout differs, and add the entries to `RALLY_ICONS`.

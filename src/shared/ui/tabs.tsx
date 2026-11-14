@@ -23,7 +23,7 @@ export function Tabs<T extends string>({ value, onChange, options, label }: Tabs
           aria-selected={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            'cursor-pointer rounded-[0.65rem] px-4 py-1.5 text-sm font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            'cursor-pointer whitespace-nowrap rounded-[0.65rem] px-4 py-1.5 text-sm font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
             value === o.value
               ? 'bg-card text-foreground shadow-soft'
               : 'text-muted-foreground hover:text-foreground'

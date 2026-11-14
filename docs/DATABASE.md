@@ -81,8 +81,9 @@ Migration files are in `supabase/migrations/` and are numbered sequentially:
 - `004_session_payments.sql` — session cost, payment status per participant, admin passcode + functions
 - `005_chat_import.sql` — `chat_name_map` + `chat_links` for the Chat history page
 - `006_member_fixes.sql` — one-off: Theo before 23 Sep → Theo Budi, merge Nat into Natalie
-- `007_matchmaking.sql` — Gavin creates this for matches + match_players
-- `008_tournaments.sql` — Gavin creates this for tournament tables
+- `007_app_settings.sql` — `app_settings` (which Rally icon the app uses) + admin-only `set_app_icon()`
+- `008_matchmaking.sql` — Gavin creates this for matches + match_players
+- `009_tournaments.sql` — Gavin creates this for tournament tables
 
 ## Payments & admin passcode
 

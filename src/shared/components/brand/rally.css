@@ -1,0 +1,45 @@
+/* Rally icon motion. `data-motion` on the <img> (see RallyLogo.tsx):
+     loop  = hops forever (loading screens)
+     hover = one hop while the logo (or the link around it) is hovered
+     none  = still
+   The icon is a flat picture, so the motion is a squash-and-stretch hop with a
+   little tilt, like a shuttle bouncing on the court. Off for reduced motion. */
+
+.rally { transform-origin: 50% 100%; }
+
+.rally[data-motion='loop'] {
+  animation: rally-hop 1.5s ease-in-out infinite;
+}
+.rally-host:hover .rally[data-motion='hover'] {
+  animation: rally-hop 1.1s ease-in-out 1;
+}
+
+@keyframes rally-hop {
+  0%, 100% { transform: translateY(0) scale(1.07, 0.93) rotate(0deg); }
+  14% { transform: translateY(0) scale(1.07, 0.93) rotate(0deg); }
+  36% { transform: translateY(-24%) scale(0.97, 1.05) rotate(-9deg); }
+  50% { transform: translateY(-30%) scale(1, 1) rotate(0deg); }
+  64% { transform: translateY(-24%) scale(0.97, 1.05) rotate(9deg); }
+  86% { transform: translateY(0) scale(1.07, 0.93) rotate(0deg); }
+}
+
+/* The soft shadow on the "court" under the loader icon: shrinks as the icon rises. */
+.rally-shadow { animation: rally-shadow 1.5s ease-in-out infinite; }
+@keyframes rally-shadow {
+  0%, 14%, 86%, 100% { transform: scaleX(1); opacity: 0.22; }
+  50% { transform: scaleX(0.6); opacity: 0.1; }
+}
+
+@keyframes rally-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rally-loader-text { animation: rally-fade-in 0.5s ease-out 0.4s both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rally,
+  .rally-shadow,
+  .rally-loader-text {
+    animation: none !important;
+  }
+}

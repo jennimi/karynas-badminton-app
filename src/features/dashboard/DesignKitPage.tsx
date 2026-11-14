@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { Badge } from '../../shared/ui/badge';
 import { Button } from '../../shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
+import { IconPicker } from '../../shared/components/brand/IconPicker';
 import { Input } from '../../shared/ui/input';
 
 const swatches = [
@@ -22,6 +23,8 @@ export default function DesignKitPage() {
           The shared building blocks. Reuse these — don’t restyle your own.
         </p>
       </header>
+
+      <IconPicker />
 
       <Card>
         <CardHeader><CardTitle>Colours</CardTitle></CardHeader>

@@ -1,3 +1,9 @@
+# Rally
+
+Sessions, members and payments for a badminton group. React + TypeScript + Vite + Supabase. See `docs/` for the architecture, database and design system.
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.

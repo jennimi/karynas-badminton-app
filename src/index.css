@@ -5,7 +5,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ==========================================================================
-   Design tokens — "Shuttle Club"
+   Design tokens — "Rally"
    Every colour in the app comes from these variables. Do not hardcode hex
    values in components; use the Tailwind classes they map to (see @theme).
    ========================================================================== */

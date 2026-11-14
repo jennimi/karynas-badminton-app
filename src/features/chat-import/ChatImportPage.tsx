@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../../shared/components/ConfirmDialog';
+import { RallyLoader } from '../../shared/components/brand/RallyLoader';
 import { PageHeader } from '../../shared/components/PageHeader';
 import { cn } from '../../shared/lib/cn';
 import type { Member, SessionSummary, SessionWithParticipants } from '../../shared/types';
@@ -1013,7 +1014,7 @@ export default function ChatImportPage() {
       )}
 
       {!chat || !group ? (
-        <Skeleton className="h-64" />
+        <RallyLoader message="Loading the chat history…" />
       ) : (
         <>
           <Alert tone="info">

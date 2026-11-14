@@ -12,7 +12,7 @@ import SessionDetailPage from './features/sessions/SessionDetailPage';
 import SessionsPage from './features/sessions/SessionsPage';
 import { AppShell } from './shared/components/AppShell';
 import { ThemeProvider } from './shared/theme/ThemeProvider';
-import { Skeleton } from './shared/ui/skeleton';
+import { RallyLoader } from './shared/components/brand/RallyLoader';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,7 +26,7 @@ const queryClient = new QueryClient({
 /** `/group` → the page of the group picked in the sidebar. */
 function CurrentGroupRedirect() {
   const { data: group } = useCurrentGroup();
-  return group ? <Navigate to={`/groups/${group.id}`} replace /> : <Skeleton className="h-56" />;
+  return group ? <Navigate to={`/groups/${group.id}`} replace /> : <RallyLoader />;
 }
 
 /**

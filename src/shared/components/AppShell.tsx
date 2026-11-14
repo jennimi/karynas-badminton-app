@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { cn } from '../lib/cn';
 import { Toaster } from '../ui/sonner';
+import { RallyLogo } from './brand/RallyLogo';
+import { useSyncFavicon } from './brand/rallyIcons';
 import { groupNavItems, isNavActive, mainNavItems, navItems, type NavItem } from './navItems';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -11,10 +13,7 @@ function Logo() {
       to="/"
       className="flex items-center gap-2.5 rounded-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
-      <span className="flex size-9 items-center justify-center rounded-control bg-brand text-lg shadow-soft">
-        🏸
-      </span>
-      <span className="text-lg font-extrabold tracking-tight">Shuttle Club</span>
+      <RallyLogo size={36} motion="hover" />
     </Link>
   );
 }
@@ -56,6 +55,7 @@ function SidebarLink({ item, pathname }: { item: NavItem; pathname: string }) {
  * `groupSwitcher` is a slot so this shared component stays feature-agnostic.
  */
 export function AppShell({ groupSwitcher }: { groupSwitcher?: ReactNode }) {
+  useSyncFavicon();
   const { pathname } = useLocation();
   const mobileItems = navItems.filter((n) => !n.comingSoon);
 

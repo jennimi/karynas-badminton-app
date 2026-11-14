@@ -2,9 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { RallyLoader } from '../../shared/components/brand/RallyLoader';
 import { PageHeader } from '../../shared/components/PageHeader';
 import type { CreateSessionInput } from '../../shared/types';
-import { Skeleton } from '../../shared/ui/skeleton';
 import { useCurrentGroup } from '../groups/hooks';
 import { addMember, getMembers } from '../members/api';
 import { createSession } from './api';
@@ -46,7 +46,7 @@ export default function CreateSessionPage() {
       <PageHeader title="New session" description="Set the details and choose who’s playing." />
 
       {isLoading || !group ? (
-        <Skeleton className="h-96" />
+        <RallyLoader message="Getting the form ready…" />
       ) : (
         <SessionForm
           members={members}

@@ -3,13 +3,13 @@ import { ChevronLeft, Clock, LayoutGrid, MapPin, Pencil, Swords, Trash2 } from '
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { RallyLoader } from '../../shared/components/brand/RallyLoader';
 import { ConfirmDialog } from '../../shared/components/ConfirmDialog';
 import { EmptyState } from '../../shared/components/EmptyState';
 import { PageHeader } from '../../shared/components/PageHeader';
 import { Badge } from '../../shared/ui/badge';
 import { Button, buttonVariants } from '../../shared/ui/button';
 import { Card, CardContent } from '../../shared/ui/card';
-import { Skeleton } from '../../shared/ui/skeleton';
 import { formatCourts, formatDate, formatTimeRange, isUpcoming, relativeDay } from '../../shared/utils/format';
 import { useCurrentGroup, useSyncCurrentGroup } from '../groups/hooks';
 import { addMember, getMembers } from '../members/api';
@@ -75,7 +75,7 @@ export default function SessionDetailPage() {
     </Link>
   );
 
-  if (isLoading) return <Skeleton className="h-64" />;
+  if (isLoading) return <RallyLoader message="Loading the session…" />;
   if (isError || !session) {
     return (
       <Card>

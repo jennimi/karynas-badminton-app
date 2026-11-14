@@ -11,6 +11,7 @@ import {
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { cn } from '../../shared/lib/cn';
+import { RallyLoader } from '../../shared/components/brand/RallyLoader';
 import { EmptyState } from '../../shared/components/EmptyState';
 import { SortControl, type SortDir } from '../../shared/components/SortControl';
 import { StatCard } from '../../shared/components/StatCard';
@@ -18,7 +19,6 @@ import { Avatar } from '../../shared/ui/avatar';
 import { Button, buttonVariants } from '../../shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
 import { Input } from '../../shared/ui/input';
-import { Skeleton } from '../../shared/ui/skeleton';
 import { Table, TBody, TD, TH, THead, TR } from '../../shared/ui/table';
 import { Tabs } from '../../shared/ui/tabs';
 import { addDays, todayString } from '../../shared/utils/format';
@@ -140,7 +140,7 @@ export default function GroupPage() {
   const topName = (g?: RankGroup) =>
     !g ? '—' : g.members.length <= 2 ? g.members.map(firstName).join(' & ') : `${firstName(g.members[0])} +${g.members.length - 1}`;
 
-  if (isLoading) return <Skeleton className="h-56" />;
+  if (isLoading) return <RallyLoader message="Loading your group…" />;
   if (isError || !group) {
     return (
       <Card>
@@ -262,7 +262,7 @@ export default function GroupPage() {
         </Card>
 
         <Card className="min-w-0 lg:col-span-2">
-          <CardHeader>
+          <CardHeader className="flex-wrap">
             <CardTitle>Top attendance</CardTitle>
             <Tabs
               label="Top attendance period"
