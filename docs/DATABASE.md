@@ -31,7 +31,7 @@
 | end_time   | time        | Optional                   |
 | location   | text        | Optional                   |
 | courts     | smallint    | Optional, courts booked    |
-| total_cost | numeric     | Set by admin only (via `set_session_cost`) |
+| total_cost | numeric     | In **thousands of Rupiah** (208 = Rp 208.000). Set by admin only (via `set_session_cost`) |
 | notes      | text        | Optional                   |
 | created_at | timestamptz | Auto-generated             |
 
@@ -82,8 +82,9 @@ Migration files are in `supabase/migrations/` and are numbered sequentially:
 - `005_chat_import.sql` — `chat_name_map` + `chat_links` for the Chat history page
 - `006_member_fixes.sql` — one-off: Theo before 23 Sep → Theo Budi, merge Nat into Natalie
 - `007_app_settings.sql` — `app_settings` (which Rally icon the app uses) + admin-only `set_app_icon()`
-- `008_matchmaking.sql` — Gavin creates this for matches + match_players
-- `009_tournaments.sql` — Gavin creates this for tournament tables
+- `008_costs_in_thousands.sql` — one-off: `sessions.total_cost` 206000 → 206 (costs are in thousands of Rupiah from now on)
+- `009_matchmaking.sql` — Gavin creates this for matches + match_players
+- `010_tournaments.sql` — Gavin creates this for tournament tables
 
 ## Payments & admin passcode
 

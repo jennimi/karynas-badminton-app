@@ -16,7 +16,7 @@ import { Button } from '../../shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
 import { Input } from '../../shared/ui/input';
 import { Skeleton } from '../../shared/ui/skeleton';
-import { formatDate, formatMoney } from '../../shared/utils/format';
+import { COST_UNIT, formatCost, formatDate, formatMoney } from '../../shared/utils/format';
 import { matchNames, nameKey } from '../../shared/utils/nameParser';
 import { useCurrentGroup } from '../groups/hooks';
 import { addMember, findDuplicate, getMembers } from '../members/api';
@@ -326,7 +326,7 @@ function DraftCard({ draft, link, resolve, members, existing, groupId, admin, re
   const [start, setStart] = useState(draft.start ?? '');
   const [end, setEnd] = useState(draft.end ?? '');
   const [location, setLocation] = useState(draft.location ?? '');
-  const [cost, setCost] = useState(draft.price ? String(draft.price.total) : '');
+  const [cost, setCost] = useState(draft.price ? String(draft.price.total / COST_UNIT) : '');
   const [overrides, setOverrides] = useState<Record<string, Target>>(link?.overrides ?? {});
   const [include, setInclude] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(draft.participants.map((p) => [p.core, !p.cancelled]))
@@ -484,13 +484,13 @@ function DraftCard({ draft, link, resolve, members, existing, groupId, admin, re
               <Input value={location} onChange={(e) => setLocation(e.target.value)} />
             </label>
             <label className="space-y-1 text-xs font-bold">
-              Total cost (Rp)
-              <Input type="number" min={0} step="any" value={cost} onChange={(e) => setCost(e.target.value)} />
+              Total cost (Rp, in thousands)
+              <Input type="number" min={0} step="any" placeholder="208" value={cost} onChange={(e) => setCost(e.target.value)} />
             </label>
           </div>
           {share != null && (
             <p className="text-xs text-muted-foreground">
-              Each person in the app: <b>{formatMoney(share)}</b>
+              Total <b>{formatCost(costNum!)}</b> · each person in the app: <b>{formatCost(share)}</b>
               {draft.price?.perPerson ? ` · chat said ${formatMoney(draft.price.perPerson)}` : ''}
             </p>
           )}
@@ -704,8 +704,8 @@ function LinkedForm({
           <Input value={location} onChange={(e) => setLocation(e.target.value)} />
         </label>
         <label className="space-y-1 text-xs font-bold">
-          Total cost (Rp)
-          <Input type="number" min={0} step="any" value={cost} onChange={(e) => setCost(e.target.value)} />
+          Total cost (Rp, in thousands)
+          <Input type="number" min={0} step="any" placeholder="208" value={cost} onChange={(e) => setCost(e.target.value)} />
         </label>
       </div>
 
@@ -835,7 +835,7 @@ function LinkedCard({
         <span className="text-sm text-muted-foreground">{summary.location}</span>
         <span className="ml-auto flex flex-wrap items-center gap-1.5">
           <Badge variant="lime">Imported ✓</Badge>
-          {summary.total_cost != null && <Badge variant="brand">{formatMoney(summary.total_cost)}</Badge>}
+          {summary.total_cost != null && <Badge variant="brand">{formatCost(summary.total_cost)}</Badge>}
           <Badge>{summary.participant_count} people</Badge>
           {summary.total_cost != null && (
             <Badge variant={summary.approved_count === summary.participant_count ? 'lime' : 'butter'}>

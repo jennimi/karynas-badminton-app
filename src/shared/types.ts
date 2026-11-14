@@ -26,7 +26,7 @@ export interface Session {
   end_time: string | null; // HH:MM
   location: string | null;
   courts: number | null; // courts booked
-  total_cost: number | null; // set by the admin, split between participants
+  total_cost: number | null; // in THOUSANDS of Rupiah (208 = Rp 208.000); set by the admin, split between participants
   notes: string | null;
   created_at: string;
 }

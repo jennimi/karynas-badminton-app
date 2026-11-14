@@ -74,7 +74,18 @@ export const CURRENCY_SYMBOL = 'Rp';
 
 const money = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 });
 
-/** "Rp 150.000", "Rp 33.333,333" (Indonesian format, up to 3 decimals). */
+/** "Rp 150.000", "Rp 33.333,333" (Indonesian format, up to 3 decimals). `amount` is in whole Rupiah. */
 export function formatMoney(amount: number): string {
   return `${CURRENCY_SYMBOL} ${money.format(amount)}`;
+}
+
+/**
+ * Session costs are stored and typed in THOUSANDS of Rupiah: 208 means Rp 208.000.
+ * (Database: sessions.total_cost, see migration 008.) Use formatCost to show one.
+ */
+export const COST_UNIT = 1000;
+
+/** formatCost(208) = "Rp 208.000"; formatCost(206 / 6) = "Rp 34.333,333". */
+export function formatCost(thousands: number): string {
+  return formatMoney(thousands * COST_UNIT);
 }

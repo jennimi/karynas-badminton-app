@@ -28,7 +28,7 @@ import {
   CardTitle,
 } from "../../../shared/ui/card";
 import { Input } from "../../../shared/ui/input";
-import { CURRENCY_SYMBOL, formatMoney } from "../../../shared/utils/format";
+import { CURRENCY_SYMBOL, formatCost } from "../../../shared/utils/format";
 import { bulkSetPaymentStatus, setPaymentStatus, setSessionCost } from "../api";
 import { useAdmin } from "../useAdmin";
 import { AdminDialog } from "./AdminDialog";
@@ -181,11 +181,14 @@ export function PaymentPanel({
                   min={0}
                   step="any"
                   autoFocus
-                  placeholder="150000"
-                  className="w-36 pl-9"
+                  placeholder="208"
+                  className="w-36 pl-9 pr-11"
                   value={costInput}
                   onChange={(e) => setCostInput(e.target.value)}
                 />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  .000
+                </span>
               </div>
               <Button type="submit" size="sm" disabled={costMutation.isPending}>
                 Save
@@ -205,7 +208,7 @@ export function PaymentPanel({
                   Total cost
                 </p>
                 <p className="text-lg font-extrabold">
-                  {total != null ? formatMoney(total) : "Not set"}
+                  {total != null ? formatCost(total) : "Not set"}
                 </p>
               </div>
               {admin.isAdmin && (
@@ -228,7 +231,7 @@ export function PaymentPanel({
               <p className="text-xs font-bold text-muted-foreground">
                 Each person
               </p>
-              <p className="text-lg font-extrabold">{formatMoney(share)}</p>
+              <p className="text-lg font-extrabold">{formatCost(share)}</p>
             </div>
           )}
           {n > 0 && costSet && (
@@ -361,7 +364,7 @@ export function PaymentPanel({
                   </span>
                   {share != null && (
                     <span className="text-sm font-semibold text-muted-foreground">
-                      {formatMoney(share)}
+                      {formatCost(share)}
                     </span>
                   )}
                   {costSet && (
