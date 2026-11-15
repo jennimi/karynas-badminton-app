@@ -31,7 +31,7 @@ export const memberTypeInfo: Record<
     label: 'Newcomer',
     variant: 'brand',
     rule: `Only joined within the group's ${TYPE_RULES.newcomerRecentSessions} most recent sessions`,
-    blurb: 'New to the group. They have only joined the latest sessions (or haven’t played yet).',
+    blurb: `New to the group. Every session they joined is among the ${TYPE_RULES.newcomerRecentSessions} most recent (or they haven’t played yet).`,
   },
   guest: {
     label: 'Guest',
@@ -49,7 +49,7 @@ export const memberTypeInfo: Record<
     label: 'Nolep',
     variant: 'coral',
     rule: `Joined over ${TYPE_RULES.nolepShare * 100}% of the sessions in the past ${TYPE_RULES.nolepWindowWeeks} weeks`,
-    blurb: `Shows up to almost everything: over ${TYPE_RULES.nolepShare * 100}% of the sessions in the past ${TYPE_RULES.nolepWindowWeeks} weeks.`,
+    blurb: `Shows up to almost everything: over ${TYPE_RULES.nolepShare * 100}% of the sessions in the past ${TYPE_RULES.nolepWindowWeeks} weeks (needs at least ${TYPE_RULES.nolepMinSessions} sessions in that time).`,
   },
   regular: {
     label: 'Regular',
@@ -127,19 +127,18 @@ export function classifyMembers(
         : `${plural} · last played ${daysAway === 0 ? 'today' : `${daysAway} day${daysAway === 1 ? '' : 's'} ago`}`;
     const inWindow = ids.filter((id) => windowIds.has(id)).length;
     const days = `${daysAway} day${daysAway === 1 ? '' : 's'}`;
-    const weeks = TYPE_RULES.inactiveDays / 7;
     const why: Record<MemberType, string> = {
       newcomer:
         ids.length === 0
           ? 'Hasn’t joined a session yet.'
-          : `Only joined ${plural}, all within the ${TYPE_RULES.newcomerRecentSessions} most recent.`,
-      guest: `Joined only ${plural}, and the last was ${days} ago (over ${weeks} weeks).`,
-      hiatus: `Joined ${plural} but nothing for ${days} (over ${weeks} weeks).`,
-      nolep: `Joined ${inWindow} of the ${windowIds.size} sessions in the past ${TYPE_RULES.nolepWindowWeeks} weeks (${Math.round((inWindow / windowIds.size) * 100)}%, over ${TYPE_RULES.nolepShare * 100}%).`,
+          : `Joined ${plural}.`,
+      guest: `Joined only ${plural}, and the last was ${days} ago.`,
+      hiatus: `Joined ${plural} but nothing for ${days}.`,
+      nolep: `Joined ${inWindow} of the ${windowIds.size} sessions in the past ${TYPE_RULES.nolepWindowWeeks} weeks.`,
       regular:
         windowIds.size < TYPE_RULES.nolepMinSessions
-          ? `Joined ${plural}, last ${daysAway === 0 ? 'today' : `${days} ago`}. Too few recent sessions to count as Nolep.`
-          : `Joined ${inWindow} of the ${windowIds.size} sessions in the past ${TYPE_RULES.nolepWindowWeeks} weeks (${Math.round((inWindow / windowIds.size) * 100)}%, Nolep needs over ${TYPE_RULES.nolepShare * 100}%).`,
+          ? `Joined ${plural}, last ${daysAway === 0 ? 'today' : `${days} ago`}.`
+          : `Joined ${inWindow} of the ${windowIds.size} sessions in the past ${TYPE_RULES.nolepWindowWeeks} weeks.`,
     };
     result.set(m.id, { type, played: ids.length, lastPlayed, detail, why: why[type] });
   }

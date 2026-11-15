@@ -16,26 +16,36 @@ import { createMatch, deleteMatch, getMatches, updateMatch } from './api';
 import { MatchDialog } from './components/MatchDialog';
 import type { MatchInput, MatchWithPlayers, Team } from './types';
 
-/** One side of a match: avatars + names, highlighted when they won. */
-function Side({ match, team, won, align }: { match: MatchWithPlayers; team: Team; won: boolean; align: 'left' | 'right' }) {
+/**
+ * One team on its own line, like a scoreboard: avatars, names (cut off with … if too long), score.
+ * Both lines are the same height whoever won, so the list stays even on a phone.
+ */
+function TeamRow({ match, team, won, lost }: { match: MatchWithPlayers; team: Team; won: boolean; lost: boolean }) {
   const players = match.players.filter((p) => p.team === team);
+  const score = team === 'A' ? match.score_a : match.score_b;
+  const names = players.map((p) => p.member.name).join(' & ') || '—';
   return (
-    <div className={cn('flex min-w-0 items-center gap-2', align === 'right' && 'flex-row-reverse text-right')}>
+    <div className="flex h-9 items-center gap-2.5">
       <div className="flex shrink-0 -space-x-2">
         {players.map((p) => (
-          <Avatar key={p.id} name={p.member.name} className="size-8 ring-2 ring-card" />
+          <Avatar key={p.id} name={p.member.name} className="size-7 text-[10px] ring-2 ring-card" compact />
         ))}
       </div>
-      <div className="min-w-0">
-        <p className={cn('text-sm leading-tight', won ? 'font-extrabold' : 'font-semibold')}>
-          {players.map((p) => p.member.name).join(' & ') || '—'}
-        </p>
-        {won && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-lime-strong">
-            <Trophy className="size-3" /> Won
-          </span>
+      <p
+        title={names}
+        className={cn('min-w-0 flex-1 truncate text-sm', won ? 'font-extrabold' : 'font-semibold', lost && 'text-muted-foreground')}
+      >
+        {names}
+      </p>
+      {won && <Trophy className="size-4 shrink-0 text-lime-strong" aria-label="Won" />}
+      <span
+        className={cn(
+          'w-8 shrink-0 text-right text-xl font-extrabold tabular-nums',
+          lost && 'text-muted-foreground'
         )}
-      </div>
+      >
+        {score ?? '–'}
+      </span>
     </div>
   );
 }
@@ -128,7 +138,7 @@ export default function MatchmakingTab({ session }: { session: SessionWithPartic
               const winner: Team | null = done && m.score_a !== m.score_b ? (m.score_a! > m.score_b! ? 'A' : 'B') : null;
               return (
                 <li key={m.id} className="rounded-2xl border border-border p-3">
-                  <div className="mb-2 flex items-center gap-2 text-xs font-bold text-muted-foreground">
+                  <div className="mb-1 flex items-center gap-2 text-xs font-bold text-muted-foreground">
                     <span>Game {m.round}</span>
                     {m.court != null && <span>· Court {m.court}</span>}
                     {!done && <Badge variant="butter">No score yet</Badge>}
@@ -155,15 +165,8 @@ export default function MatchmakingTab({ session }: { session: SessionWithPartic
                       )}
                     </span>
                   </div>
-                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                    <Side match={m} team="A" won={winner === 'A'} align="left" />
-                    <div className="flex items-center gap-1.5 text-xl font-extrabold tabular-nums">
-                      <span className={cn(winner === 'B' && 'text-muted-foreground')}>{m.score_a ?? '–'}</span>
-                      <span className="text-sm text-muted-foreground">:</span>
-                      <span className={cn(winner === 'A' && 'text-muted-foreground')}>{m.score_b ?? '–'}</span>
-                    </div>
-                    <Side match={m} team="B" won={winner === 'B'} align="right" />
-                  </div>
+                  <TeamRow match={m} team="A" won={winner === 'A'} lost={winner === 'B'} />
+                  <TeamRow match={m} team="B" won={winner === 'B'} lost={winner === 'A'} />
                 </li>
               );
             })}

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { RallyLoader } from '../../shared/components/brand/RallyLoader';
 import { PageHeader } from '../../shared/components/PageHeader';
@@ -14,6 +14,20 @@ export default function CreateSessionPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: group } = useCurrentGroup();
+
+  // The Courts page links here with the slot that was picked: /sessions/new?date=…&start=…&end=…&location=…&courts=…
+  // Nothing is saved until the form is submitted, so it can still be changed.
+  const [params] = useSearchParams();
+  const time = (v: string | null) => (v && /^\d{2}:\d{2}$/.test(v) ? v : null);
+  const date = params.get('date');
+  const prefill = {
+    date: date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined,
+    start_time: time(params.get('start')),
+    end_time: time(params.get('end')),
+    location: params.get('location'),
+    courts: Number(params.get('courts')) || null,
+    notes: params.get('notes'),
+  };
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ['members', group?.id],
@@ -50,6 +64,7 @@ export default function CreateSessionPage() {
       ) : (
         <SessionForm
           members={members}
+          initialData={prefill}
           isLoading={createMutation.isPending}
           onCancel={() => navigate(-1)}
           onSubmit={async (data) => {

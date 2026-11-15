@@ -10,10 +10,17 @@ export interface Group {
   created_at: string;
 }
 
+/** The design system's four accent colours. */
+export type MemberColor = 'brand' | 'lime' | 'butter' | 'coral';
+
 export interface Member {
   id: string;
   group_id: string;
   name: string;
+  /** their chosen icon (migration 013); empty = their initials */
+  emoji?: string | null;
+  /** background colour of their icon (migration 014); empty = picked from their name */
+  color?: MemberColor | null;
   created_at: string;
 }
 
@@ -41,6 +48,29 @@ export interface SessionParticipant {
   paid_at: string | null;
   approved_at: string | null;
   created_at: string;
+}
+
+/** A place the group plays at, linked to its page on AYO (see features/courts, migration 012). */
+export interface GroupVenue {
+  id: string;
+  group_id: string;
+  name: string;
+  /** end of the venue's AYO link: ayo.co/v/<ayo_slug> */
+  ayo_slug: string;
+  /** AYO's own number for the venue */
+  ayo_venue_id: number;
+  created_at: string;
+}
+
+/** One session a member is in, with their share of the cost (member page). */
+export interface MemberBill {
+  participant_id: string;
+  payment_status: PaymentStatus;
+  session: Pick<Session, 'id' | 'title' | 'date' | 'start_time' | 'end_time' | 'location' | 'total_cost'>;
+  /** people the cost is split between */
+  participant_count: number;
+  /** their share in THOUSANDS of Rupiah, or null while the session has no cost yet */
+  share: number | null;
 }
 
 // Group with headline numbers (dashboard cards)

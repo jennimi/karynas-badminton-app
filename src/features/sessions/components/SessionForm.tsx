@@ -22,7 +22,8 @@ export interface SessionFormData {
 
 interface Props {
   members: Member[];
-  initialData?: Session & { participantIds?: string[] };
+  /** Values to start from: a whole session when editing, or just a few fields (e.g. from the Courts page). */
+  initialData?: Partial<Session> & { participantIds?: string[] };
   onSubmit: (data: SessionFormData) => Promise<void>;
   onCancel: () => void;
   onCreateMember?: (name: string) => Promise<Member>;
@@ -58,7 +59,7 @@ export default function SessionForm({
       start_time: startTime,
       end_time: endTime,
       location: location.trim(),
-      courts: courts ? Number(courts) : initialData?.courts ? null : undefined,
+      courts: courts ? Number(courts) : initialData?.id && initialData.courts ? null : undefined,
       notes: notes.trim(),
       participant_member_ids: participantIds,
     });

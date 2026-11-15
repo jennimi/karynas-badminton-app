@@ -1,7 +1,9 @@
 import { Check, Pencil, Trash2, X } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import type { Member } from '../../../shared/types';
 import { Avatar } from '../../../shared/ui/avatar';
+import { Badge } from '../../../shared/ui/badge';
 import { Button } from '../../../shared/ui/button';
 import { Input } from '../../../shared/ui/input';
 import type { MemberTypeResult } from '../memberType';
@@ -10,12 +12,14 @@ import { MemberTypeBadge } from './MemberTypeBadge';
 interface Props {
   members: Member[];
   types: Map<string, MemberTypeResult>;
+  /** The member this browser tab is "being" (see useMe): gets a You label. */
+  meId?: string | null;
   /** Only given to admins: without it, the Remove button isn't shown. */
   onDelete?: (member: Member) => void;
   onRename: (id: string, newName: string) => void;
 }
 
-export default function MemberList({ members, types, onDelete, onRename }: Props) {
+export default function MemberList({ members, types, meId, onDelete, onRename }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
@@ -35,7 +39,7 @@ export default function MemberList({ members, types, onDelete, onRename }: Props
     <ul className="divide-y divide-border">
       {members.map((m) => (
         <li key={m.id} className="flex items-center gap-3 px-2 py-3">
-          <Avatar name={m.name} />
+          <Avatar name={m.name} emoji={m.emoji} color={m.color} />
           {editingId === m.id ? (
             <form onSubmit={(e) => save(e, m)} className="flex flex-1 items-center gap-2">
               <Input
@@ -62,7 +66,13 @@ export default function MemberList({ members, types, onDelete, onRename }: Props
             <>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="truncate font-bold">{m.name}</span>
+                  <Link
+                    to={`/members/${m.id}`}
+                    className="truncate rounded font-bold hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    {m.name}
+                  </Link>
+                  {m.id === meId && <Badge variant="brand">You</Badge>}
                   <MemberTypeBadge result={types.get(m.id)} />
                 </div>
                 {types.get(m.id) && (

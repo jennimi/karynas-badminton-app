@@ -1,12 +1,14 @@
 import { cleanName } from '../utils/nameParser';
 import { cn } from '../lib/cn';
 
-const tones = [
-  'bg-brand-soft text-brand-strong',
-  'bg-lime-soft text-lime-strong',
-  'bg-butter-soft text-butter-strong',
-  'bg-coral-soft text-coral-strong',
-];
+export const avatarTones = {
+  brand: 'bg-brand-soft text-brand-strong',
+  lime: 'bg-lime-soft text-lime-strong',
+  butter: 'bg-butter-soft text-butter-strong',
+  coral: 'bg-coral-soft text-coral-strong',
+} as const;
+export type AvatarColor = keyof typeof avatarTones;
+const tones = Object.values(avatarTones);
 
 /** Same name always gets the same colour. */
 function toneFor(name: string) {
@@ -23,10 +25,16 @@ function initialsOf(name: string) {
 
 export function Avatar({
   name,
+  emoji,
+  color,
   className,
   compact = false,
 }: {
   name: string;
+  /** The member's chosen emoji: shown instead of their initials. */
+  emoji?: string | null;
+  /** The member's chosen background colour; without it the colour comes from the name. */
+  color?: AvatarColor | null;
   className?: string;
   /** Show only the first initial (for small or overlapping avatars). */
   compact?: boolean;
@@ -36,11 +44,17 @@ export function Avatar({
       aria-hidden="true"
       className={cn(
         'inline-flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-extrabold ring-2 ring-card',
-        toneFor(name),
+        (color && avatarTones[color]) || toneFor(name),
         className
       )}
     >
-      {compact ? Array.from(initialsOf(name))[0] : initialsOf(name)}
+      {emoji ? (
+        <span className="text-[1.35em] leading-none">{emoji}</span>
+      ) : compact ? (
+        Array.from(initialsOf(name))[0]
+      ) : (
+        initialsOf(name)
+      )}
     </span>
   );
 }

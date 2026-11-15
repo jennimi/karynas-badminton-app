@@ -167,7 +167,7 @@ export function MatchDialog({ players, gamesPlayed, courts, match, saving, onClo
               onClick={() => setActive(team)}
               className="rounded-xl border border-dashed border-border px-2 py-1.5 text-left text-sm text-muted-foreground"
             >
-              {teams[team].length + i === 0 ? 'Pick a player' : 'Partner (optional)'}
+              {teams[team].length + i === 0 ? 'Pick a player' : 'Partner'}
             </button>
           ))}
         </div>
@@ -196,7 +196,6 @@ export function MatchDialog({ players, gamesPlayed, courts, match, saving, onClo
       wide
       onClose={onClose}
       title={match ? `Edit game ${match.round}` : 'Add a match'}
-      description="Tap players to fill Team A, then Team B. Two a side for doubles, one for singles."
     >
       <form
         className="space-y-4"
@@ -261,8 +260,15 @@ export function MatchDialog({ players, gamesPlayed, courts, match, saving, onClo
                     >
                       <Avatar name={p.name} className="size-6 text-[10px]" compact />
                       {p.name}
-                      <span className={cn('text-[11px] font-semibold', t ? 'opacity-80' : 'text-muted-foreground')}>
-                        {t ? teamStyle[t].label.slice(-1) : games === 0 ? 'no games yet' : `${games} game${games === 1 ? '' : 's'}`}
+                      <span
+                        title={t ? teamStyle[t].label : `Games played this session: ${games}`}
+                        className={cn(
+                          'min-w-5 rounded-md px-1 text-center text-[11px] font-extrabold tabular-nums',
+                          t ? 'bg-ink/10' : 'bg-muted text-muted-foreground'
+                        )}
+                      >
+                        {t ? teamStyle[t].label.slice(-1) : games}
+                        <span className="sr-only">{t ? '' : ' games played'}</span>
                       </span>
                     </button>
                   </li>

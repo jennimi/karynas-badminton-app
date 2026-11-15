@@ -57,9 +57,12 @@ function SidebarLink({ item, pathname }: { item: NavItem; pathname: string }) {
 export function AppShell({
   groupSwitcher,
   adminControl,
+  profileControl,
 }: {
   groupSwitcher?: ReactNode;
   adminControl?: ReactNode;
+  /** "Who are you?" button (features/members): full width in the sidebar, compact on phones. */
+  profileControl?: ReactNode;
 }) {
   useSyncFavicon();
   const { pathname } = useLocation();
@@ -91,9 +94,12 @@ export function AppShell({
           </div>
         </nav>
 
-        <div className="flex items-center justify-between">
-          {adminControl ?? <span />}
-          <ThemeToggle />
+        <div className="flex flex-col gap-3">
+          {profileControl}
+          <div className="flex items-center justify-between">
+            {adminControl ?? <span />}
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
 
@@ -101,6 +107,7 @@ export function AppShell({
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-card/90 px-4 py-3 backdrop-blur lg:hidden">
         <Logo />
         <div className="flex items-center gap-1">
+          {profileControl}
           {adminControl}
           <ThemeToggle />
         </div>

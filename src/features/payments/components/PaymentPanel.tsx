@@ -29,6 +29,7 @@ import {
 import { Input } from "../../../shared/ui/input";
 import { CURRENCY_SYMBOL, formatCost } from "../../../shared/utils/format";
 import { bulkSetPaymentStatus, setPaymentStatus, setSessionCost } from "../api";
+import { useMe } from "../../members/useMe";
 import { useAdmin } from "../useAdmin";
 import { AdminDialog } from "./AdminDialog";
 import { ShareDialog } from "./ShareDialog";
@@ -55,6 +56,7 @@ export function PaymentPanel({
 }) {
   const queryClient = useQueryClient();
   const admin = useAdmin(session.group_id);
+  const me = useMe(session.group_id);
   const [unlocking, setUnlocking] = useState(false);
   const [editingCost, setEditingCost] = useState(false);
   const [costInput, setCostInput] = useState("");
@@ -429,9 +431,14 @@ export function PaymentPanel({
                       )}
                     </button>
                   )}
-                  <Avatar name={p.member.name} className="size-7 text-[11px]" />
+                  <Avatar name={p.member.name} emoji={p.member.emoji} color={p.member.color} className="size-7 text-[11px]" />
                   <span className="min-w-0 flex-1 truncate text-sm font-bold">
                     {p.member.name}
+                    {p.member_id === me.memberId && (
+                      <Badge variant="brand" className="ml-2">
+                        You
+                      </Badge>
+                    )}
                   </span>
                   {costSet && (
                     <Badge variant={info.variant}>{info.label}</Badge>

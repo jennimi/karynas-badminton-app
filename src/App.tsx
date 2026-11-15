@@ -3,11 +3,14 @@ import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-
 import DashboardPage from './features/dashboard/DashboardPage';
 import DesignKitPage from './features/dashboard/DesignKitPage';
 import GroupPage from './features/groups/GroupPage';
+import CourtsPage from './features/courts/CourtsPage';
 import ChatImportPage from './features/chat-import/ChatImportPage';
 import { GroupSwitcher } from './features/groups/components/GroupSwitcher';
 import { useCurrentGroup } from './features/groups/hooks';
 import { AdminToggle } from './features/payments/components/AdminToggle';
 import MembersPage from './features/members/MembersPage';
+import MemberProfilePage from './features/members/MemberProfilePage';
+import { MeControl } from './features/members/components/MeControl';
 import CreateSessionPage from './features/sessions/CreateSessionPage';
 import SessionDetailPage from './features/sessions/SessionDetailPage';
 import SessionsPage from './features/sessions/SessionsPage';
@@ -54,7 +57,7 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <Routes>
-            <Route element={<AppShell groupSwitcher={<GroupSwitcher />} adminControl={<AdminToggle />} />}>
+            <Route element={<AppShell groupSwitcher={<GroupSwitcher />} adminControl={<AdminToggle />} profileControl={<MeControl />} />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/group" element={<CurrentGroupRedirect />} />
               <Route path="/groups/:id" element={<GroupPage />} />
@@ -62,6 +65,8 @@ export default function App() {
               <Route path="/sessions/new" element={<CreateSessionPage />} />
               <Route path="/sessions/:id" element={<SessionDetailPage />} />
               <Route path="/members" element={<MembersPage />} />
+              <Route path="/members/:id" element={<MemberProfilePage />} />
+              <Route path="/courts" element={<CourtsPage />} />
               <Route path="/s/:code" element={<ShortSessionRedirect />} />
               <Route path="/chat-import" element={<ChatImportPage />} />
               {/* Developer reference for the shared components */}

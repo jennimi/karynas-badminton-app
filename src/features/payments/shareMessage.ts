@@ -61,11 +61,19 @@ const dayDate = (date: string) => {
  *   Thursday - 12 Nov 2026, Weston
  *   Rp 990.000 / 32 = Rp 30.937,5
  *
- *   1. Albert 🐢        (an emoji = payment approved)
+ *   1. Albert 🐢        (an emoji = payment approved; it's the one they chose, if they chose one)
  *   2. Charlotte
  *
  *   https://rally-kba.vercel.app/s/...
  */
+/** The emoji a member chose for themselves, or their automatic one. */
+export function memberEmoji(member: { id: string; emoji?: string | null }): string {
+  return member.emoji?.trim() || emojiFor(member.id);
+}
+
+/** The emojis offered on a member's page (anything else can be typed in). */
+export const EMOJI_CHOICES = EMOJIS;
+
 export function buildPaymentMessage(session: SessionWithParticipants, origin: string): string {
   const people = [...session.participants].sort((a, b) => a.member.name.localeCompare(b.member.name));
   const n = people.length;
@@ -75,7 +83,7 @@ export function buildPaymentMessage(session: SessionWithParticipants, origin: st
       ? `${formatCost(session.total_cost)} / ${n} = ${formatCost(session.total_cost / n)}`
       : null;
   const names = people.map(
-    (p, i) => `${i + 1}. ${p.member.name}${p.payment_status === 'approved' ? ` ${emojiFor(p.member_id)}` : ''}`
+    (p, i) => `${i + 1}. ${p.member.name}${p.payment_status === 'approved' ? ` ${memberEmoji(p.member)}` : ''}`
   );
   return [head, price, '', ...names, '', shortSessionLink(origin, session.id)]
     .filter((line) => line !== null)

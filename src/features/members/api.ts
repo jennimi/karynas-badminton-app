@@ -1,6 +1,6 @@
 import { supabase } from '../../shared/supabase';
 import { friendlyRpcError } from '../../shared/utils/rpcError';
-import type { Member } from '../../shared/types';
+import type { Member, MemberBill, MemberColor, PaymentStatus, Session } from '../../shared/types';
 import { cleanName, nameKey } from '../../shared/utils/nameParser';
 
 export class DuplicateMemberError extends Error {
@@ -109,4 +109,63 @@ export async function updateMemberName(
     throw error;
   }
   return data;
+}
+
+export async function getMember(memberId: string): Promise<Member> {
+  const { data, error } = await supabase.from('members').select('*').eq('id', memberId).single();
+  if (error) throw error;
+  return data;
+}
+
+/** Set a member's own emoji; null goes back to the automatic one. */
+export async function updateMemberEmoji(memberId: string, emoji: string | null): Promise<Member> {
+  const value = emoji?.trim() || null;
+  const { data, error } = await supabase
+    .from('members')
+    .update({ emoji: value })
+    .eq('id', memberId)
+    .select()
+    .single();
+  if (error) {
+    if (error.code === '23514') throw new Error('Use one emoji (or a few characters at most).');
+    throw friendlyRpcError(error.message, '013_member_emoji.sql');
+  }
+  return data;
+}
+
+/** Set the background colour of a member's icon; null goes back to the automatic one. */
+export async function updateMemberColor(memberId: string, color: MemberColor | null): Promise<Member> {
+  const { data, error } = await supabase.from('members').update({ color }).eq('id', memberId).select().single();
+  if (error) throw friendlyRpcError(error.message, '014_member_color.sql');
+  return data;
+}
+
+/** Every session a member is in (newest first), with their payment status and share of the cost. */
+export async function getMemberBills(memberId: string): Promise<MemberBill[]> {
+  const { data, error } = await supabase
+    .from('session_participants')
+    .select(
+      'id, payment_status, session:sessions!inner(id, title, date, start_time, end_time, location, total_cost, session_participants(count))'
+    )
+    .eq('member_id', memberId);
+  if (error) throw error;
+
+  type Row = {
+    id: string;
+    payment_status: PaymentStatus;
+    session: MemberBill['session'] & Pick<Session, 'total_cost'> & { session_participants: { count: number }[] };
+  };
+  return ((data ?? []) as unknown as Row[])
+    .map((row) => {
+      const { session_participants: counts, ...session } = row.session;
+      const n = counts?.[0]?.count ?? 0;
+      return {
+        participant_id: row.id,
+        payment_status: row.payment_status,
+        session,
+        participant_count: n,
+        share: session.total_cost != null && n > 0 ? session.total_cost / n : null,
+      };
+    })
+    .sort((a, b) => b.session.date.localeCompare(a.session.date));
 }

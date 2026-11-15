@@ -2,6 +2,7 @@ import {
   CalendarDays,
   Home,
   LayoutDashboard,
+  MapPinned,
   Swords,
   Trophy,
   Users,
@@ -34,6 +35,7 @@ export const groupNavItems: NavItem[] = [
   { to: '/group', label: 'Overview', icon: Home, alsoActiveFor: ['/groups'] },
   { to: '/sessions', label: 'Sessions', icon: CalendarDays },
   { to: '/members', label: 'Members', icon: Users },
+  { to: '/courts', label: 'Courts', icon: MapPinned },
   // Gavin: set comingSoon to false (and point `to` at your route) when ready.
   { to: '/matches', label: 'Matches', icon: Swords, comingSoon: true },
   { to: '/tournaments', label: 'Tournaments', icon: Trophy, comingSoon: true },

@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import {
+  CalendarCheck,
   CalendarDays,
   CalendarPlus,
   Pencil,
   Search,
-  Trophy,
   UserPlus,
   Users,
 } from 'lucide-react';
@@ -43,7 +43,6 @@ interface RankGroup {
   last: string;
 }
 
-const firstName = (m: Member) => m.name.split(' ')[0];
 
 /** Inside a group: info, upcoming sessions, member statistics and the member list. */
 export default function GroupPage() {
@@ -118,7 +117,10 @@ export default function GroupPage() {
       ? Math.round(recentSessions.reduce((n, s) => n + s.participant_count, 0) / recentSessions.length)
       : null;
 
-    return { recent, allTime, newcomers, avg, top: recent[0] };
+    const held = sessions.filter((s) => s.date <= t);
+    const heldRecently = held.filter((s) => s.date >= since).length;
+
+    return { recent, allTime, newcomers, avg, held: held.length, heldRecently };
   }, [members, sessions, attendance, types]);
 
   // sessions come newest first
@@ -137,8 +139,6 @@ export default function GroupPage() {
     sortDir
   );
   const topFive = (topRange === 'recent' ? stats.recent : stats.allTime).slice(0, 5);
-  const topName = (g?: RankGroup) =>
-    !g ? '—' : g.members.length <= 2 ? g.members.map(firstName).join(' & ') : `${firstName(g.members[0])} +${g.members.length - 1}`;
 
   if (isLoading) return <RallyLoader message="Loading your group…" />;
   if (isError || !group) {
@@ -185,16 +185,16 @@ export default function GroupPage() {
         <StatCard
           label="Avg. attendance"
           value={stats.avg ?? '—'}
-          hint={`per session · last ${RECENT_DAYS} days`}
+          hint={`per session · ${RECENT_DAYS} days`}
           icon={CalendarDays}
           tone="lime"
         />
         <StatCard label="Newcomers" value={stats.newcomers} hint="recently joined" icon={UserPlus} tone="butter" />
         <StatCard
-          label="Most active"
-          value={topName(stats.top)}
-          hint={stats.top ? `${stats.top.attended} sessions · ${RECENT_DAYS} days` : undefined}
-          icon={Trophy}
+          label="Sessions held"
+          value={stats.held}
+          hint={`${stats.heldRecently} in ${RECENT_DAYS} days`}
+          icon={CalendarCheck}
           tone="coral"
         />
       </section>
@@ -287,7 +287,7 @@ export default function GroupPage() {
                 <span className="w-4 text-sm font-extrabold text-muted-foreground">{i + 1}</span>
                 <div className="flex shrink-0 -space-x-2">
                   {r.members.slice(0, 3).map((m) => (
-                    <Avatar key={m.id} name={m.name} className="size-8 ring-2 ring-card" />
+                    <Avatar key={m.id} name={m.name} emoji={m.emoji} color={m.color} className="size-8 ring-2 ring-card" />
                   ))}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -370,8 +370,10 @@ export default function GroupPage() {
                   <TR key={member.id}>
                     <TD>
                       <div className="flex items-center gap-3">
-                        <Avatar name={member.name} />
-                        <span className="font-bold">{member.name}</span>
+                        <Avatar name={member.name} emoji={member.emoji} color={member.color} />
+                        <Link to={`/members/${member.id}`} className="font-bold hover:underline">
+                          {member.name}
+                        </Link>
                         <MemberTypeBadge result={types.get(member.id)} />
                       </div>
                     </TD>

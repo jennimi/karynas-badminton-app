@@ -72,6 +72,18 @@ Created by `009_matches.sql`. Used by `src/features/matchmaking/` (the "Matches"
 
 **Constraint:** `UNIQUE(match_id, member_id)`. Access is open like sessions (no login yet).
 
+### `group_venues`
+| Column       | Type        | Notes                                              |
+|--------------|-------------|----------------------------------------------------|
+| id           | uuid (PK)   | Auto-generated                                     |
+| group_id     | uuid (FK)   | → groups.id, cascade delete                        |
+| name         | text        | Venue name as shown on AYO                         |
+| ayo_slug     | text        | End of the venue's link: `ayo.co/v/<ayo_slug>`     |
+| ayo_venue_id | integer     | AYO's own number for the venue                     |
+| created_at   | timestamptz | Auto-generated                                     |
+
+**Constraint:** `UNIQUE(group_id, ayo_venue_id)`. Access is open like sessions (no login yet).
+
 ## Migrations
 
 Migration files are in `supabase/migrations/` and are numbered sequentially:
@@ -86,6 +98,9 @@ Migration files are in `supabase/migrations/` and are numbered sequentially:
 - `009_matches.sql` — `matches` + `match_players` (who played whom in a session, and the score)
 - `010_admin_deletes.sql` — deleting sessions / members / matches is admin-only (`delete_session`, `delete_member`, `delete_match`), plus `create_match`
 - `011_tournaments.sql` — Gavin creates this for tournament tables
+- `014_member_color.sql` — `members.color`: background colour of a member's icon (one of the four accent colours)
+- `013_member_emoji.sql` — `members.emoji`: a member's own icon, also used in the payment message
+- `012_group_venues.sql` — `group_venues`: the AYO venues each group checks on the Courts page
 
 ## Payments & admin passcode
 
