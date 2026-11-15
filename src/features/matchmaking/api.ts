@@ -58,8 +58,8 @@ export async function updateMatch(matchId: string, input: MatchInput) {
   if (playersError) fail(playersError);
 }
 
-/** Admin only: the database checks the passcode (supabase/migrations/010_admin_deletes.sql). */
-export async function deleteMatch(matchId: string, adminCode: string) {
-  const { error } = await supabase.rpc('delete_match', { p_match: matchId, p_code: adminCode });
-  if (error) throw friendlyRpcError(error.message, '010_admin_deletes.sql');
+/** Anyone can delete a match (migration 015). Its players go with it (cascade). */
+export async function deleteMatch(matchId: string) {
+  const { error } = await supabase.from('matches').delete().eq('id', matchId);
+  if (error) throw friendlyRpcError(error.message, '015_open_match_delete.sql');
 }

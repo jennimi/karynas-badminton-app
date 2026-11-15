@@ -59,7 +59,7 @@ const dayDate = (date: string) => {
 /**
  * The text people paste into the group chat:
  *   Thursday - 12 Nov 2026, Weston
- *   Rp 990.000 / 32 = Rp 30.937,5
+ *   Rp 990 / 32 = Rp 30,938
  *
  *   1. Albert 🐢        (an emoji = payment approved; it's the one they chose, if they chose one)
  *   2. Charlotte

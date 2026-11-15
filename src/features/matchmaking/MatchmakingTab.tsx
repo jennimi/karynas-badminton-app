@@ -11,7 +11,6 @@ import { Badge } from '../../shared/ui/badge';
 import { Button } from '../../shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
 import { Skeleton } from '../../shared/ui/skeleton';
-import { useAdmin } from '../payments/useAdmin';
 import { createMatch, deleteMatch, getMatches, updateMatch } from './api';
 import { MatchDialog } from './components/MatchDialog';
 import type { MatchInput, MatchWithPlayers, Team } from './types';
@@ -56,7 +55,6 @@ function TeamRow({ match, team, won, lost }: { match: MatchWithPlayers; team: Te
  */
 export default function MatchmakingTab({ session }: { session: SessionWithParticipants }) {
   const queryClient = useQueryClient();
-  const admin = useAdmin(session.group_id);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<MatchWithPlayers | null>(null);
   const [removing, setRemoving] = useState<MatchWithPlayers | null>(null);
@@ -87,16 +85,13 @@ export default function MatchmakingTab({ session }: { session: SessionWithPartic
     onSuccess: refresh,
   });
   const deleteMutation = useMutation({
-    mutationFn: (m: MatchWithPlayers) => deleteMatch(m.id, admin.code!),
+    mutationFn: (m: MatchWithPlayers) => deleteMatch(m.id),
     onSuccess: () => {
       refresh();
       setRemoving(null);
       toast.success('Match removed');
     },
-    onError: (e: Error) => {
-      if (/passcode|only the admin/i.test(e.message)) admin.lock();
-      toast.error(e.message);
-    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const save = async (input: MatchInput, another: boolean) => {
@@ -152,7 +147,6 @@ export default function MatchmakingTab({ session }: { session: SessionWithPartic
                       >
                         <Pencil />
                       </Button>
-                      {admin.isAdmin && (
                       <Button
                         size="icon"
                         variant="ghost"
@@ -162,7 +156,6 @@ export default function MatchmakingTab({ session }: { session: SessionWithPartic
                       >
                         <Trash2 />
                       </Button>
-                      )}
                     </span>
                   </div>
                   <TeamRow match={m} team="A" won={winner === 'A'} lost={winner === 'B'} />

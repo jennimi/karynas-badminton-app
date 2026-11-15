@@ -96,6 +96,7 @@ Migration files are in `supabase/migrations/` and are numbered sequentially:
 - `007_app_settings.sql` — `app_settings` (which Rally icon the app uses) + admin-only `set_app_icon()`
 - `008_costs_in_thousands.sql` — one-off: `sessions.total_cost` 206000 → 206 (costs are in thousands of Rupiah from now on)
 - `009_matches.sql` — `matches` + `match_players` (who played whom in a session, and the score)
+- `015_open_match_delete.sql` — deleting a match is open to everyone again (a game record, unlike sessions/members)
 - `010_admin_deletes.sql` — deleting sessions / members / matches is admin-only (`delete_session`, `delete_member`, `delete_match`), plus `create_match`
 - `011_tournaments.sql` — Gavin creates this for tournament tables
 - `014_member_color.sql` — `members.color`: background colour of a member's icon (one of the four accent colours)

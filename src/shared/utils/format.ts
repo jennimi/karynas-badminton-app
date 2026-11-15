@@ -85,7 +85,12 @@ export function formatMoney(amount: number): string {
  */
 export const COST_UNIT = 1000;
 
-/** formatCost(208) = "Rp 208.000"; formatCost(206 / 6) = "Rp 34.333,333". */
+/**
+ * Shows a cost in its own unit (thousands), so the number stays short: a whole total like
+ * 530 reads "Rp 530", and a per-person split keeps up to whole-Rupiah precision —
+ * formatCost(530 / 19) = "Rp 27,895" (the comma is the decimal point; 894 = 894 Rupiah),
+ * dropping the useless fraction of a Rupiah. See migration 008 for why costs are in thousands.
+ */
 export function formatCost(thousands: number): string {
-  return formatMoney(thousands * COST_UNIT);
+  return `${CURRENCY_SYMBOL} ${money.format(thousands)}`;
 }
