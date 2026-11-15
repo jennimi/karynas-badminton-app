@@ -18,6 +18,7 @@ interface DialogProps {
  */
 export function Dialog({ open, onClose, title, description, children, wide }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  const mouseDownOnBackdrop = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -30,9 +31,16 @@ export function Dialog({ open, onClose, title, description, children, wide }: Di
     <dialog
       ref={ref}
       onClose={onClose}
+      onMouseDown={(e) => {
+        mouseDownOnBackdrop.current = e.target === ref.current;
+      }}
       onClick={(e) => {
-        // click on the backdrop (the dialog element itself) closes it
-        if (e.target === ref.current) onClose();
+        // Only close if the press started on the backdrop too, so dragging
+        // to highlight text outside the box doesn't dismiss the dialog.
+        if (mouseDownOnBackdrop.current && e.target === ref.current) {
+          onClose();
+        }
+        mouseDownOnBackdrop.current = false;
       }}
       className={`m-auto w-[calc(100%-2rem)] ${wide ? 'max-w-2xl' : 'max-w-md'} rounded-card border border-border bg-card p-0 text-card-foreground shadow-soft backdrop:bg-ink/50 backdrop:backdrop-blur-sm`}
     >
