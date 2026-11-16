@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, RotateCcw, Trophy } from 'lucide-react';
-import { useState } from 'react';
+import { AlertTriangle, Check, RotateCcw, Trophy } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { cn } from '../../../shared/lib/cn';
@@ -12,8 +12,9 @@ import { Field } from '../../../shared/ui/field';
 import { Input } from '../../../shared/ui/input';
 import { useAdmin } from '../../payments/useAdmin';
 import { recordMatchScore } from '../api';
-import { formatPairName } from '../bracket';
+import { detectMatchPlayerConflicts, formatPairName } from '../bracket';
 import type {
+  MatchPlayerConflict,
   TournamentMatch,
   TournamentParticipantWithMember,
 } from '../types';
@@ -27,6 +28,10 @@ interface RecordScoreDialogProps {
   participant1: TournamentParticipantWithMember | null;
   participant2: TournamentParticipantWithMember | null;
   initialWinnerId?: string | null;
+  onResolveConflict?: (
+    match: TournamentMatch,
+    conflict: MatchPlayerConflict
+  ) => void;
 }
 
 export function RecordScoreDialog({
@@ -38,6 +43,7 @@ export function RecordScoreDialog({
   participant1,
   participant2,
   initialWinnerId,
+  onResolveConflict,
 }: RecordScoreDialogProps) {
   const queryClient = useQueryClient();
   const { isAdmin } = useAdmin(groupId);
@@ -55,6 +61,11 @@ export function RecordScoreDialog({
     match.court !== null ? String(match.court) : ''
   );
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+
+  const conflicts = useMemo(
+    () => detectMatchPlayerConflicts(participant1, participant2),
+    [participant1, participant2]
+  );
 
   const hasExistingResult =
     match.winner_id !== null || match.score_1 !== null || match.score_2 !== null;
@@ -148,6 +159,27 @@ export function RecordScoreDialog({
         description="Pick the winning pair immediately, or edit scores before/after the match. Switching the winner automatically fixes downstream rounds."
       >
         <form onSubmit={handleSave} className="space-y-4">
+          {conflicts.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-coral bg-coral-soft/70 p-3 text-xs text-coral-strong">
+              <div className="flex items-center gap-2 font-extrabold">
+                <AlertTriangle className="size-4 shrink-0" />
+                <span>
+                  Conflict: {conflicts.map((c) => c.playerName).join(', ')} on both opposing pairs!
+                </span>
+              </div>
+              {onResolveConflict && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onResolveConflict(match, conflicts[0])}
+                >
+                  Sub / Replace Player
+                </Button>
+              )}
+            </div>
+          )}
+
           {/* 1. Direct Winner Selector */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">

@@ -25,6 +25,8 @@ import { getMembers } from '../../members/api';
 import { useMe } from '../../members/useMe';
 import { createTournament } from '../api';
 import {
+  getMultiTeamPlayerCounts,
+  getPlayerIdentityKey,
   nextPowerOfTwo,
   parseDoublesPairLines,
   resolvePlayerIdentity,
@@ -35,6 +37,9 @@ interface CreateTournamentDialogProps {
   open: boolean;
   onClose: () => void;
   groupId: string;
+  sessionId?: string | null;
+  initialName?: string;
+  initialPairs?: DraftDoublesPair[];
 }
 
 type EntryMode = 'list' | 'rows';
@@ -43,15 +48,26 @@ export function CreateTournamentDialog({
   open,
   onClose,
   groupId,
+  sessionId,
+  initialName,
+  initialPairs,
 }: CreateTournamentDialogProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { memberId: myMemberId } = useMe(groupId);
 
-  const [name, setName] = useState('');
-  const [mode, setMode] = useState<EntryMode>('list');
-  const [listText, setListText] = useState('');
-  const [customPairs, setCustomPairs] = useState<DraftDoublesPair[]>([]);
+  const [name, setName] = useState(initialName ?? '');
+  const [mode, setMode] = useState<EntryMode>(
+    initialPairs && initialPairs.length > 0 ? 'rows' : 'list'
+  );
+  const [listText, setListText] = useState(() =>
+    initialPairs && initialPairs.length > 0
+      ? initialPairs.map((p) => `${p.player1Name} & ${p.player2Name}`).join('\n')
+      : ''
+  );
+  const [customPairs, setCustomPairs] = useState<DraftDoublesPair[]>(
+    () => initialPairs ?? []
+  );
 
   // Inline quick-add row fields when in 'rows' mode
   const [draftP1, setDraftP1] = useState('');
@@ -78,14 +94,26 @@ export function CreateTournamentDialog({
   // Active pairs depend on current mode; switching to 'rows' copies parsed pairs so user can reorder/edit
   const activePairs = mode === 'list' ? parsedFromText : customPairs;
 
-  const availableMembers = useMemo(() => {
+  const playerTeamCounts = useMemo(
+    () => getMultiTeamPlayerCounts(activePairs),
+    [activePairs]
+  );
+
+  const assignedMemberIds = useMemo(() => {
     const usedIds = new Set<string>();
     for (const pair of activePairs) {
       if (pair.player1MemberId) usedIds.add(pair.player1MemberId);
       if (pair.player2MemberId) usedIds.add(pair.player2MemberId);
     }
-    return members.filter((m) => !usedIds.has(m.id));
-  }, [members, activePairs]);
+    return usedIds;
+  }, [activePairs]);
+
+  // Keep all members selectable so players can intentionally join multiple teams (marked 2x)
+  const sortedMembers = useMemo(() => {
+    const unassigned = members.filter((m) => !assignedMemberIds.has(m.id));
+    const assigned = members.filter((m) => assignedMemberIds.has(m.id));
+    return [...unassigned, ...assigned];
+  }, [members, assignedMemberIds]);
 
   const bracketSize =
     activePairs.length >= 2 ? nextPowerOfTwo(activePairs.length) : 0;
@@ -205,11 +233,15 @@ export function CreateTournamentDialog({
     mutationFn: () =>
       createTournament({
         groupId,
+        sessionId,
         name,
         pairs: activePairs,
       }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['tournaments', groupId] });
+      if (sessionId) {
+        queryClient.invalidateQueries({ queryKey: ['sessionTournaments', sessionId] });
+      }
       toast.success(`Doubles tournament "${created.name}" created!`);
       onClose();
       navigate(`/tournaments/${created.id}`);
@@ -295,22 +327,28 @@ export function CreateTournamentDialog({
               />
             </Field>
 
-            {availableMembers.length > 0 && (
+            {sortedMembers.length > 0 && (
               <div className="space-y-1">
                 <p className="text-[11px] font-bold text-muted-foreground">
-                  Quick-insert group member (or type any Guest name above):
+                  Quick-insert group member (or type any Guest name above; members can join 2+ teams):
                 </p>
                 <div className="flex max-h-20 flex-wrap gap-1 overflow-y-auto rounded-xl border border-border bg-muted/40 p-1.5">
-                  {availableMembers.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => appendNameToList(m.name)}
-                      className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-card px-2 py-0.5 text-xs font-bold text-foreground shadow-soft hover:bg-brand-soft hover:text-brand-strong"
-                    >
-                      <span>+ {m.name}</span>
-                    </button>
-                  ))}
+                  {sortedMembers.map((m) => {
+                    const isAssigned = assignedMemberIds.has(m.id);
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => appendNameToList(m.name)}
+                        className="inline-flex cursor-pointer items-center gap-1 rounded-full bg-card px-2 py-0.5 text-xs font-bold text-foreground shadow-soft hover:bg-brand-soft hover:text-brand-strong"
+                      >
+                        <span>
+                          + {m.name}
+                          {isAssigned ? ' (2x)' : ''}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -349,7 +387,7 @@ export function CreateTournamentDialog({
             </div>
 
             <datalist id="group-member-suggestions">
-              {availableMembers.map((m) => (
+              {sortedMembers.map((m) => (
                 <option key={m.id} value={m.name} />
               ))}
             </datalist>
@@ -401,6 +439,11 @@ export function CreateTournamentDialog({
                   Boolean(myMemberId) &&
                   (pair.player1MemberId === myMemberId ||
                     pair.player2MemberId === myMemberId);
+                const p1Key = getPlayerIdentityKey(pair.player1Name, pair.player1MemberId);
+                const p2Key = getPlayerIdentityKey(pair.player2Name, pair.player2MemberId);
+                const hasMultiTeamPlayer =
+                  (p1Key ? (playerTeamCounts.get(p1Key) ?? 0) >= 2 : false) ||
+                  (p2Key ? (playerTeamCounts.get(p2Key) ?? 0) >= 2 : false);
 
                 return (
                   <div
@@ -430,23 +473,32 @@ export function CreateTournamentDialog({
                       </div>
 
                       {mode === 'rows' ? (
-                        <div className="grid flex-1 grid-cols-2 gap-1.5">
-                          <Input
-                            value={pair.player1Name}
-                            list="group-member-suggestions"
-                            onChange={(e) =>
-                              updateRowPlayer(idx, 1, e.target.value)
-                            }
-                            className="h-7 px-2 text-xs"
-                          />
-                          <Input
-                            value={pair.player2Name}
-                            list="group-member-suggestions"
-                            onChange={(e) =>
-                              updateRowPlayer(idx, 2, e.target.value)
-                            }
-                            className="h-7 px-2 text-xs"
-                          />
+                        <div className="flex flex-1 flex-col gap-1">
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <Input
+                              value={pair.player1Name}
+                              list="group-member-suggestions"
+                              onChange={(e) =>
+                                updateRowPlayer(idx, 1, e.target.value)
+                              }
+                              className="h-7 px-2 text-xs"
+                            />
+                            <Input
+                              value={pair.player2Name}
+                              list="group-member-suggestions"
+                              onChange={(e) =>
+                                updateRowPlayer(idx, 2, e.target.value)
+                              }
+                              className="h-7 px-2 text-xs"
+                            />
+                          </div>
+                          {hasMultiTeamPlayer && (
+                            <div className="flex items-center gap-1">
+                              <Badge variant="butter" className="px-1.5 py-0 text-[10px]">
+                                2x Team
+                              </Badge>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="flex min-w-0 flex-wrap items-center gap-1">
@@ -465,6 +517,11 @@ export function CreateTournamentDialog({
                           {!m2 && (
                             <Badge variant="butter" className="px-1.5 py-0 text-[10px]">
                               Guest
+                            </Badge>
+                          )}
+                          {hasMultiTeamPlayer && (
+                            <Badge variant="butter" className="px-1.5 py-0 text-[10px]">
+                              2x Team
                             </Badge>
                           )}
                           {hasMe && (

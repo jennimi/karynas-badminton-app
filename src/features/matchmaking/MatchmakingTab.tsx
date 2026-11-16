@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Swords, Trash2, Trophy } from 'lucide-react';
+import { Pencil, Plus, Shuffle, Swords, Trash2, Trophy } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../../shared/components/ConfirmDialog';
@@ -53,7 +53,13 @@ function TeamRow({ match, team, won, lost }: { match: MatchWithPlayers; team: Te
  * Matches played in a session: the list, plus a pop-up to add or edit one
  * (who played whom, and the score). Shown on the session page.
  */
-export default function MatchmakingTab({ session }: { session: SessionWithParticipants }) {
+export default function MatchmakingTab({
+  session,
+  onOpenShuffle,
+}: {
+  session: SessionWithParticipants;
+  onOpenShuffle?: () => void;
+}) {
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<MatchWithPlayers | null>(null);
@@ -109,9 +115,16 @@ export default function MatchmakingTab({ session }: { session: SessionWithPartic
         <CardTitle className="flex items-center gap-2">
           Matches <Badge variant="brand">{matches.length}</Badge>
         </CardTitle>
-        <Button size="sm" onClick={() => setAdding(true)} disabled={!!error}>
-          <Plus /> Add match
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onOpenShuffle && (
+            <Button size="sm" variant="secondary" onClick={onOpenShuffle}>
+              <Shuffle /> Shuffle Pairs
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setAdding(true)} disabled={!!error}>
+            <Plus /> Add match
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {error ? (

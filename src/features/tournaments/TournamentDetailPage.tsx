@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Calendar,
   Crown,
+  Pencil,
   Swords,
   Trash2,
   Trophy,
@@ -26,10 +27,18 @@ import { useSyncCurrentGroup } from '../groups/hooks';
 import { useMe } from '../members/useMe';
 import { useAdmin } from '../payments/useAdmin';
 import { deleteTournament, getTournament } from './api';
-import { formatPairName, getRoundLabel, nextPowerOfTwo } from './bracket';
+import {
+  formatPairName,
+  getMultiTeamPlayerCounts,
+  getPlayerIdentityKey,
+  getRoundLabel,
+  nextPowerOfTwo,
+} from './bracket';
 import { BracketMatchCard } from './components/BracketMatchCard';
+import { EditTournamentPairDialog } from './components/EditTournamentPairDialog';
 import { RecordScoreDialog } from './components/RecordScoreDialog';
 import type {
+  MatchPlayerConflict,
   TournamentMatch,
   TournamentParticipantWithMember,
   TournamentStatus,
@@ -67,6 +76,11 @@ export default function TournamentDetailPage() {
     matchId: string;
     preselectedWinnerId?: string | null;
   } | null>(null);
+  const [editPairState, setEditPairState] = useState<{
+    participant: TournamentParticipantWithMember;
+    opposingParticipant?: TournamentParticipantWithMember | null;
+    conflict?: MatchPlayerConflict | null;
+  } | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const participantById = useMemo(() => {
@@ -76,6 +90,19 @@ export default function TournamentDetailPage() {
     }
     return map;
   }, [tournament?.participants]);
+
+  const multiTeamCounts = useMemo(
+    () =>
+      getMultiTeamPlayerCounts(
+        (tournament?.participants ?? []).map((p) => ({
+          player1Name: p.player1_name,
+          player1MemberId: p.member_id,
+          player2Name: p.player2_name,
+          player2MemberId: p.partner_member_id,
+        }))
+      ),
+    [tournament?.participants]
+  );
 
   const rounds = useMemo(() => {
     if (!tournament) return [];
@@ -132,6 +159,11 @@ export default function TournamentDetailPage() {
           queryKey: ['tournaments', tournament.group_id],
         });
       }
+      if (tournament?.session_id) {
+        queryClient.invalidateQueries({
+          queryKey: ['sessionTournaments', tournament.session_id],
+        });
+      }
       toast.success('Tournament deleted.');
       navigate('/tournaments');
     },
@@ -139,6 +171,25 @@ export default function TournamentDetailPage() {
       toast.error(err.message || 'Could not delete tournament');
     },
   });
+
+  function handleResolveConflict(
+    match: TournamentMatch,
+    conflict: MatchPlayerConflict
+  ) {
+    const p1 = match.participant1_id
+      ? participantById.get(match.participant1_id)
+      : null;
+    const p2 = match.participant2_id
+      ? participantById.get(match.participant2_id)
+      : null;
+    if (!p1 || !p2) return;
+    setSelectedMatchState(null);
+    setEditPairState({
+      participant: p1,
+      opposingParticipant: p2,
+      conflict,
+    });
+  }
 
   if (isLoading) {
     return <RallyLoader />;
@@ -171,13 +222,25 @@ export default function TournamentDetailPage() {
   return (
     <div className="space-y-8">
       <div className="space-y-3">
-        <Link
-          to="/tournaments"
-          className="inline-flex items-center gap-1.5 text-sm font-bold text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-4" />
-          All tournaments
-        </Link>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Link
+            to="/tournaments"
+            className="inline-flex items-center gap-1.5 text-sm font-bold text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="size-4" />
+            All tournaments
+          </Link>
+
+          {tournament.session_id && (
+            <Link
+              to={`/sessions/${tournament.session_id}`}
+              className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1 text-xs font-extrabold text-brand-strong hover:bg-brand/25"
+            >
+              <Calendar className="size-3.5" />
+              Back to Session
+            </Link>
+          )}
+        </div>
 
         <PageHeader
           title={
@@ -334,6 +397,7 @@ export default function TournamentDetailPage() {
                               preselectedWinnerId,
                             })
                           }
+                          onResolveConflict={handleResolveConflict}
                         />
                       ))}
                     </div>
@@ -348,9 +412,14 @@ export default function TournamentDetailPage() {
       {/* Seeded Doubles Pairs Roster */}
       <Card>
         <CardHeader>
-          <CardTitle>
-            Seeded Doubles Teams ({tournament.participants.length})
-          </CardTitle>
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
+            <CardTitle>
+              Seeded Doubles Teams ({tournament.participants.length})
+            </CardTitle>
+            <span className="text-xs font-semibold text-muted-foreground">
+              Need a mid-tournament sub? Click Edit on any team
+            </span>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid gap-2.5 sm:grid-cols-2">
@@ -362,6 +431,11 @@ export default function TournamentDetailPage() {
               const isChampion = championPair?.id === p.id;
               const p1Guest = !p.member_id;
               const p2Guest = !p.partner_member_id;
+              const p1Key = getPlayerIdentityKey(p.player1_name, p.member_id);
+              const p2Key = getPlayerIdentityKey(p.player2_name, p.partner_member_id);
+              const hasMultiTeam =
+                (p1Key ? (multiTeamCounts.get(p1Key) ?? 0) >= 2 : false) ||
+                (p2Key ? (multiTeamCounts.get(p2Key) ?? 0) >= 2 : false);
 
               return (
                 <div
@@ -418,6 +492,14 @@ export default function TournamentDetailPage() {
                             {p.player2_name}: Guest
                           </Badge>
                         )}
+                        {hasMultiTeam && (
+                          <Badge
+                            variant="butter"
+                            className="px-1.5 py-0 text-[10px]"
+                          >
+                            2x Team
+                          </Badge>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -430,6 +512,16 @@ export default function TournamentDetailPage() {
                         Champs
                       </Badge>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      onClick={() => setEditPairState({ participant: p })}
+                      aria-label={`Edit ${formatPairName(p)}`}
+                      title="Edit or swap players"
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
                   </div>
                 </div>
               );
@@ -457,6 +549,22 @@ export default function TournamentDetailPage() {
               : null
           }
           initialWinnerId={selectedMatchState?.preselectedWinnerId}
+          onResolveConflict={handleResolveConflict}
+        />
+      )}
+
+      {/* Mid-Tournament Pair Edit / Conflict Substitution Modal */}
+      {editPairState && (
+        <EditTournamentPairDialog
+          open={Boolean(editPairState)}
+          onClose={() => setEditPairState(null)}
+          tournamentId={tournament.id}
+          groupId={tournament.group_id}
+          sessionId={tournament.session_id}
+          participant={editPairState.participant}
+          opposingParticipant={editPairState.opposingParticipant}
+          conflict={editPairState.conflict}
+          allParticipants={tournament.participants}
         />
       )}
 

@@ -5,6 +5,7 @@ export type TournamentStatus = 'draft' | 'in_progress' | 'completed';
 export interface Tournament {
   id: string;
   group_id: string;
+  session_id?: string | null;
   name: string;
   status: TournamentStatus;
   created_at: string;
@@ -68,8 +69,28 @@ export interface DraftDoublesPair {
 
 export interface CreateTournamentInput {
   groupId: string;
+  sessionId?: string | null;
   name: string;
   pairs: DraftDoublesPair[];
+}
+
+export interface UpdateTournamentParticipantInput {
+  participantId: string;
+  tournamentId: string;
+  player1Name: string;
+  player1MemberId: string | null;
+  player2Name: string;
+  player2MemberId: string | null;
+}
+
+export interface MatchPlayerConflict {
+  identityKey: string;
+  playerName: string;
+  memberId: string | null;
+  pair1ParticipantId: string;
+  pair1Slot: 1 | 2;
+  pair2ParticipantId: string;
+  pair2Slot: 1 | 2;
 }
 
 export interface RecordMatchScoreInput {
