@@ -38,7 +38,7 @@ export const groupNavItems: NavItem[] = [
   { to: '/courts', label: 'Courts', icon: MapPinned },
   // Gavin: set comingSoon to false (and point `to` at your route) when ready.
   { to: '/matches', label: 'Matches', icon: Swords, comingSoon: true },
-  { to: '/tournaments', label: 'Tournaments', icon: Trophy, comingSoon: true },
+  { to: '/tournaments', label: 'Tournaments', icon: Trophy },
 ];
 
 export const navItems: NavItem[] = [...mainNavItems, ...groupNavItems];

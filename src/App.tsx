@@ -14,6 +14,8 @@ import { MeControl } from './features/members/components/MeControl';
 import CreateSessionPage from './features/sessions/CreateSessionPage';
 import SessionDetailPage from './features/sessions/SessionDetailPage';
 import SessionsPage from './features/sessions/SessionsPage';
+import TournamentDetailPage from './features/tournaments/TournamentDetailPage';
+import TournamentsPage from './features/tournaments/TournamentsPage';
 import { AppShell } from './shared/components/AppShell';
 import { ThemeProvider } from './shared/theme/ThemeProvider';
 import { RallyLoader } from './shared/components/brand/RallyLoader';
@@ -67,6 +69,8 @@ export default function App() {
               <Route path="/members" element={<MembersPage />} />
               <Route path="/members/:id" element={<MemberProfilePage />} />
               <Route path="/courts" element={<CourtsPage />} />
+              <Route path="/tournaments" element={<TournamentsPage />} />
+              <Route path="/tournaments/:id" element={<TournamentDetailPage />} />
               <Route path="/s/:code" element={<ShortSessionRedirect />} />
               <Route path="/chat-import" element={<ChatImportPage />} />
               {/* Developer reference for the shared components */}

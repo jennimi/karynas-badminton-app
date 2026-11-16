@@ -98,7 +98,7 @@ Migration files are in `supabase/migrations/` and are numbered sequentially:
 - `009_matches.sql` — `matches` + `match_players` (who played whom in a session, and the score)
 - `015_open_match_delete.sql` — deleting a match is open to everyone again (a game record, unlike sessions/members)
 - `010_admin_deletes.sql` — deleting sessions / members / matches is admin-only (`delete_session`, `delete_member`, `delete_match`), plus `create_match`
-- `011_tournaments.sql` — Gavin creates this for tournament tables
+- `011_tournaments.sql` — `tournaments`, `tournament_participants`, and `tournament_matches` (single-elimination knockout brackets)
 - `014_member_color.sql` — `members.color`: background colour of a member's icon (one of the four accent colours)
 - `013_member_emoji.sql` — `members.emoji`: a member's own icon, also used in the payment message
 - `012_group_venues.sql` — `group_venues`: the AYO venues each group checks on the Courts page
