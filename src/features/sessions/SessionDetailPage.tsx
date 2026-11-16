@@ -1,5 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, Clock, LayoutGrid, MapPin, Pencil, Swords, Trash2, Users, Wallet } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  LayoutGrid,
+  MapPin,
+  Pencil,
+  Shuffle,
+  Swords,
+  Trash2,
+  Trophy,
+  Users,
+  Wallet,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -19,9 +32,14 @@ import { addMember, getMembers } from '../members/api';
 import { deleteSession, getSession, updateSession } from './api';
 import SessionForm from './components/SessionForm';
 import { getMatches } from '../matchmaking/api';
+import { ShufflePairsModal } from '../matchmaking/components/ShufflePairsModal';
 import MatchmakingTab from '../matchmaking/MatchmakingTab';
 import { useAdmin } from '../payments/useAdmin';
 import { PaymentPanel } from '../payments/components/PaymentPanel';
+import { getSessionTournaments } from '../tournaments/api';
+import { formatPairName } from '../tournaments/bracket';
+import { CreateTournamentDialog } from '../tournaments/components/CreateTournamentDialog';
+import type { DraftDoublesPair } from '../tournaments/types';
 
 export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -29,6 +47,10 @@ export default function SessionDetailPage() {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [shuffleOpen, setShuffleOpen] = useState(false);
+  const [tournamentDraftPairs, setTournamentDraftPairs] = useState<
+    DraftDoublesPair[] | null
+  >(null);
   const [params] = useSearchParams();
   // a shared link (/s/…) opens on Payments: ?tab=payments
   const linkedTab = params.get('tab') === 'payments' ? 'payments' : params.get('tab') === 'matches' ? 'matches' : null;
@@ -54,6 +76,11 @@ export default function SessionDetailPage() {
     queryKey: ['members', group?.id],
     queryFn: () => getMembers(group!.id),
     enabled: !!group,
+  });
+  const { data: sessionTournaments = [] } = useQuery({
+    queryKey: ['sessionTournaments', id],
+    queryFn: () => getSessionTournaments(id!),
+    enabled: !!id,
   });
 
   const refreshLists = () => {
@@ -157,6 +184,9 @@ export default function SessionDetailPage() {
         description={session.title ? formatDate(session.date, 'long') : undefined}
         actions={
           <>
+            <Button variant="secondary" onClick={() => setShuffleOpen(true)}>
+              <Shuffle /> Shuffle Pairs
+            </Button>
             <Button variant="outline" onClick={() => setIsEditing(true)}>
               <Pencil /> Edit
             </Button>
@@ -184,6 +214,64 @@ export default function SessionDetailPage() {
         )}
       </div>
       {session.notes && <p className="rounded-2xl bg-muted/60 p-3 text-sm">{session.notes}</p>}
+
+      {sessionTournaments.length > 0 && (
+        <section aria-label="Session tournaments" className="space-y-2.5">
+          {sessionTournaments.map((t) => {
+            const isDone = t.status === 'completed';
+            return (
+              <Card
+                key={t.id}
+                className={cn(
+                  'flex flex-wrap items-center justify-between gap-3 p-4',
+                  isDone
+                    ? 'border-border bg-lime-soft/50'
+                    : 'border-brand bg-brand-soft/45'
+                )}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    className={cn(
+                      'flex size-10 shrink-0 items-center justify-center rounded-2xl shadow-soft',
+                      isDone ? 'bg-lime text-ink' : 'bg-brand text-ink'
+                    )}
+                  >
+                    <Trophy className="size-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate text-sm font-extrabold">
+                        {t.name}
+                      </span>
+                      <Badge variant={isDone ? 'lime' : 'butter'}>
+                        {isDone ? 'Completed' : 'Active Tournament'}
+                      </Badge>
+                    </div>
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      {t.participant_count} pairs · {t.completed_match_count}/
+                      {t.match_count} matches decided
+                      {t.champion_pair
+                        ? ` · Champions: ${formatPairName(t.champion_pair)}`
+                        : ''}
+                    </p>
+                  </div>
+                </div>
+
+                <Link
+                  to={`/tournaments/${t.id}`}
+                  className={buttonVariants({
+                    variant: isDone ? 'lime' : 'primary',
+                    size: 'sm',
+                  })}
+                >
+                  Open Bracket
+                  <ChevronRight className="size-4" />
+                </Link>
+              </Card>
+            );
+          })}
+        </section>
+      )}
 
       <section aria-label="Session overview" className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <StatCard
@@ -218,7 +306,7 @@ export default function SessionDetailPage() {
 
       {/* phone: switch between the two panels (so neither is buried at the bottom) */}
       <div className="lg:hidden">
-        <Tabs
+        <Tabs<'matches' | 'payments'>
           label="Session sections"
           value={activeTab}
           onChange={setTab}
@@ -232,12 +320,36 @@ export default function SessionDetailPage() {
       {/* desktop: matches (main) next to payments */}
       <div className="grid items-start gap-6 lg:grid-cols-5">
         <div className={cn(activeTab === 'matches' ? 'block' : 'hidden', 'min-w-0 lg:col-span-3 lg:block')}>
-          <MatchmakingTab session={session} />
+          <MatchmakingTab
+            session={session}
+            onOpenShuffle={() => setShuffleOpen(true)}
+          />
         </div>
         <div className={cn(activeTab === 'payments' ? 'block' : 'hidden', 'min-w-0 lg:col-span-2 lg:block')}>
           <PaymentPanel session={session} onAddParticipants={() => setIsEditing(true)} />
         </div>
       </div>
+
+      {shuffleOpen && (
+        <ShufflePairsModal
+          open={shuffleOpen}
+          onClose={() => setShuffleOpen(false)}
+          session={session}
+          members={members}
+          onCustomizeTournament={(pairs) => setTournamentDraftPairs(pairs)}
+        />
+      )}
+
+      {tournamentDraftPairs !== null && (
+        <CreateTournamentDialog
+          open={tournamentDraftPairs !== null}
+          onClose={() => setTournamentDraftPairs(null)}
+          groupId={session.group_id}
+          sessionId={session.id}
+          initialName={`${session.title?.trim() || formatDate(session.date, 'short')} Tournament`}
+          initialPairs={tournamentDraftPairs}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmDelete}

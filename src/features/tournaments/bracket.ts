@@ -2,6 +2,7 @@ import type { Member } from '../../shared/types';
 import { cleanName, nameKey } from '../../shared/utils/nameParser';
 import type {
   DraftDoublesPair,
+  MatchPlayerConflict,
   TournamentMatch,
   TournamentParticipant,
   TournamentStatus,
@@ -54,6 +55,104 @@ export function formatPairName(
   pair: Pick<TournamentParticipant, 'player1_name' | 'player2_name'>
 ): string {
   return `${pair.player1_name} & ${pair.player2_name}`;
+}
+
+/**
+ * Stable identity key for a player (member ID if linked, otherwise normalized name key).
+ */
+export function getPlayerIdentityKey(name: string, memberId: string | null): string {
+  if (memberId) {
+    return `member:${memberId}`;
+  }
+  const normalized = nameKey(cleanName(name));
+  return normalized ? `name:${normalized}` : '';
+}
+
+/**
+ * Detect whether the same player appears on both opposing doubles pairs in a match.
+ */
+export function detectMatchPlayerConflicts(
+  participant1: TournamentParticipant | null,
+  participant2: TournamentParticipant | null
+): MatchPlayerConflict[] {
+  if (!participant1 || !participant2) return [];
+
+  const p1Slots: { slot: 1 | 2; name: string; memberId: string | null; key: string }[] = [
+    {
+      slot: 1,
+      name: participant1.player1_name,
+      memberId: participant1.member_id,
+      key: getPlayerIdentityKey(participant1.player1_name, participant1.member_id),
+    },
+    {
+      slot: 2,
+      name: participant1.player2_name,
+      memberId: participant1.partner_member_id,
+      key: getPlayerIdentityKey(participant1.player2_name, participant1.partner_member_id),
+    },
+  ];
+
+  const p2Slots: { slot: 1 | 2; name: string; memberId: string | null; key: string }[] = [
+    {
+      slot: 1,
+      name: participant2.player1_name,
+      memberId: participant2.member_id,
+      key: getPlayerIdentityKey(participant2.player1_name, participant2.member_id),
+    },
+    {
+      slot: 2,
+      name: participant2.player2_name,
+      memberId: participant2.partner_member_id,
+      key: getPlayerIdentityKey(participant2.player2_name, participant2.partner_member_id),
+    },
+  ];
+
+  const conflicts: MatchPlayerConflict[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const s1 of p1Slots) {
+    if (!s1.key) continue;
+    for (const s2 of p2Slots) {
+      if (!s2.key || s1.key !== s2.key || seenKeys.has(s1.key)) continue;
+      seenKeys.add(s1.key);
+      conflicts.push({
+        identityKey: s1.key,
+        playerName: s1.name,
+        memberId: s1.memberId ?? s2.memberId,
+        pair1ParticipantId: participant1.id,
+        pair1Slot: s1.slot,
+        pair2ParticipantId: participant2.id,
+        pair2Slot: s2.slot,
+      });
+    }
+  }
+
+  return conflicts;
+}
+
+/**
+ * Count how many doubles teams each player identity belongs to across a list of pairs.
+ */
+export function getMultiTeamPlayerCounts(
+  pairs: Array<{
+    player1Name: string;
+    player1MemberId: string | null;
+    player2Name: string;
+    player2MemberId: string | null;
+  }>
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const pair of pairs) {
+    const k1 = getPlayerIdentityKey(pair.player1Name, pair.player1MemberId);
+    const k2 = getPlayerIdentityKey(pair.player2Name, pair.player2MemberId);
+    if (k1) {
+      counts.set(k1, (counts.get(k1) ?? 0) + 1);
+    }
+    if (k2 && k2 !== k1) {
+      counts.set(k2, (counts.get(k2) ?? 0) + 1);
+    }
+  }
+  return counts;
 }
 
 /**

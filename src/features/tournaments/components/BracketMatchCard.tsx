@@ -1,9 +1,11 @@
-import { Check, Pencil, Trophy } from 'lucide-react';
+import { AlertTriangle, Check, Pencil, Trophy } from 'lucide-react';
+import { useMemo } from 'react';
 import { cn } from '../../../shared/lib/cn';
 import { Avatar } from '../../../shared/ui/avatar';
 import { Badge } from '../../../shared/ui/badge';
-import { formatPairName } from '../bracket';
+import { detectMatchPlayerConflicts, formatPairName } from '../bracket';
 import type {
+  MatchPlayerConflict,
   TournamentMatch,
   TournamentParticipantWithMember,
 } from '../types';
@@ -15,6 +17,10 @@ interface BracketMatchCardProps {
   myMemberId: string | null;
   isFinal?: boolean;
   onSelect: (match: TournamentMatch, preselectedWinnerId?: string | null) => void;
+  onResolveConflict?: (
+    match: TournamentMatch,
+    conflict: MatchPlayerConflict
+  ) => void;
 }
 
 export function BracketMatchCard({
@@ -24,6 +30,7 @@ export function BracketMatchCard({
   myMemberId,
   isFinal = false,
   onSelect,
+  onResolveConflict,
 }: BracketMatchCardProps) {
   const isRound1Bye =
     match.round === 1 &&
@@ -48,6 +55,11 @@ export function BracketMatchCard({
 
   const p1Won = match.winner_id !== null && match.winner_id === match.participant1_id;
   const p2Won = match.winner_id !== null && match.winner_id === match.participant2_id;
+
+  const conflicts = useMemo(
+    () => detectMatchPlayerConflicts(participant1, participant2),
+    [participant1, participant2]
+  );
 
   return (
     <div
@@ -114,6 +126,36 @@ export function BracketMatchCard({
           }}
         />
       </div>
+
+      {hasBothPairs && conflicts.length > 0 && (
+        <div className="mt-2 space-y-1.5 rounded-xl border border-coral bg-coral-soft/70 p-2 text-xs text-coral-strong">
+          {conflicts.map((conflict) => (
+            <div
+              key={conflict.identityKey}
+              className="flex items-center justify-between gap-2"
+            >
+              <span className="inline-flex min-w-0 items-center gap-1 font-extrabold">
+                <AlertTriangle className="size-3.5 shrink-0" />
+                <span className="truncate">
+                  {conflict.playerName} on both teams
+                </span>
+              </span>
+              {onResolveConflict && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onResolveConflict(match, conflict);
+                  }}
+                  className="shrink-0 cursor-pointer rounded-lg bg-card px-2 py-0.5 text-[11px] font-extrabold text-coral-strong shadow-soft hover:bg-coral hover:text-ink"
+                >
+                  Sub / Replace
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {hasBothPairs && (
         <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-1.5 text-[11px] font-bold">

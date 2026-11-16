@@ -1,5 +1,9 @@
 import { supabase } from '../../shared/supabase';
-import { computeScorePropagation, generateBracketMatches } from './bracket';
+import {
+  computeScorePropagation,
+  generateBracketMatches,
+  getPlayerIdentityKey,
+} from './bracket';
 import type {
   CreateTournamentInput,
   RecordMatchScoreInput,
@@ -9,6 +13,7 @@ import type {
   TournamentParticipant,
   TournamentParticipantWithMember,
   TournamentSummary,
+  UpdateTournamentParticipantInput,
 } from './types';
 
 interface RawTournamentSummaryRow extends Tournament {
@@ -23,38 +28,9 @@ interface RawTournamentSummaryRow extends Tournament {
   }[];
 }
 
-/**
- * Fetch all tournaments for a group, enriched with doubles pair counts, match progress,
- * and the champion pair (when completed).
- */
-export async function getTournaments(groupId: string): Promise<TournamentSummary[]> {
-  const { data, error } = await supabase
-    .from('tournaments')
-    .select(
-      `
-      *,
-      tournament_participants (
-        *,
-        member:members!tournament_participants_member_id_fkey (*),
-        partner:members!tournament_participants_partner_member_id_fkey (*)
-      ),
-      tournament_matches (
-        id,
-        round,
-        participant1_id,
-        participant2_id,
-        winner_id,
-        next_match_id
-      )
-    `
-    )
-    .eq('group_id', groupId)
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-
-  const rows = (data ?? []) as unknown as RawTournamentSummaryRow[];
-
+function mapRawTournamentSummaries(
+  rows: RawTournamentSummaryRow[]
+): TournamentSummary[] {
   return rows.map((row) => {
     const participants = row.tournament_participants ?? [];
     const matches = row.tournament_matches ?? [];
@@ -81,6 +57,7 @@ export async function getTournaments(groupId: string): Promise<TournamentSummary
     return {
       id: row.id,
       group_id: row.group_id,
+      session_id: row.session_id ?? null,
       name: row.name,
       status: row.status,
       created_at: row.created_at,
@@ -90,6 +67,62 @@ export async function getTournaments(groupId: string): Promise<TournamentSummary
       champion_pair: championPair,
     };
   });
+}
+
+const TOURNAMENT_SUMMARY_SELECT = `
+  *,
+  tournament_participants (
+    *,
+    member:members!tournament_participants_member_id_fkey (*),
+    partner:members!tournament_participants_partner_member_id_fkey (*)
+  ),
+  tournament_matches (
+    id,
+    round,
+    participant1_id,
+    participant2_id,
+    winner_id,
+    next_match_id
+  )
+`;
+
+/**
+ * Fetch all tournaments for a group, enriched with doubles pair counts, match progress,
+ * and the champion pair (when completed).
+ */
+export async function getTournaments(groupId: string): Promise<TournamentSummary[]> {
+  const { data, error } = await supabase
+    .from('tournaments')
+    .select(TOURNAMENT_SUMMARY_SELECT)
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return mapRawTournamentSummaries((data ?? []) as unknown as RawTournamentSummaryRow[]);
+}
+
+/**
+ * Fetch tournaments linked to a specific session (`tournaments.session_id`),
+ * gracefully returning [] if migration 016 has not been applied yet.
+ */
+export async function getSessionTournaments(
+  sessionId: string
+): Promise<TournamentSummary[]> {
+  const { data, error } = await supabase
+    .from('tournaments')
+    .select(TOURNAMENT_SUMMARY_SELECT)
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    if (/session_id|column|schema cache/i.test(error.message)) {
+      return [];
+    }
+    throw error;
+  }
+
+  return mapRawTournamentSummaries((data ?? []) as unknown as RawTournamentSummaryRow[]);
 }
 
 /**
@@ -142,6 +175,7 @@ export async function getTournament(tournamentId: string): Promise<TournamentDet
  */
 export async function createTournament({
   groupId,
+  sessionId,
   name,
   pairs,
 }: CreateTournamentInput): Promise<Tournament> {
@@ -158,16 +192,37 @@ export async function createTournament({
     throw new Error('Add at least 2 doubles pairs to start a tournament.');
   }
 
-  // 1. Insert tournament record
-  const { data: tournamentRow, error: tErr } = await supabase
+  // 1. Insert tournament record (with graceful fallback if session_id column is not yet migrated)
+  let tournamentRow: unknown = null;
+  let tErr: { message: string } | null = null;
+
+  const firstAttempt = await supabase
     .from('tournaments')
     .insert({
       group_id: groupId,
       name: trimmedName,
       status: 'in_progress',
+      ...(sessionId ? { session_id: sessionId } : {}),
     })
     .select('*')
     .single();
+
+  tournamentRow = firstAttempt.data;
+  tErr = firstAttempt.error;
+
+  if (tErr && sessionId && /session_id|column|schema cache/i.test(tErr.message)) {
+    const fallbackAttempt = await supabase
+      .from('tournaments')
+      .insert({
+        group_id: groupId,
+        name: trimmedName,
+        status: 'in_progress',
+      })
+      .select('*')
+      .single();
+    tournamentRow = fallbackAttempt.data;
+    tErr = fallbackAttempt.error;
+  }
 
   if (tErr) throw tErr;
   const tournament = tournamentRow as unknown as Tournament;
@@ -299,6 +354,62 @@ export async function recordMatchScore({
     .eq('id', tournamentId);
 
   if (tErr) throw tErr;
+}
+
+/**
+ * Update a doubles team's players/partners mid-tournament without breaking bracket match links.
+ * Uses the `update_tournament_participant` RPC and gracefully falls back to a direct table update
+ * if migration 016 has not been applied yet.
+ */
+export async function updateTournamentParticipant({
+  participantId,
+  player1Name,
+  player1MemberId,
+  player2Name,
+  player2MemberId,
+}: UpdateTournamentParticipantInput): Promise<TournamentParticipant> {
+  const p1 = player1Name.trim();
+  const p2 = player2Name.trim();
+  if (!p1 || !p2) {
+    throw new Error('Both Player 1 and Player 2 names are required.');
+  }
+
+  const key1 = getPlayerIdentityKey(p1, player1MemberId);
+  const key2 = getPlayerIdentityKey(p2, player2MemberId);
+  if ((player1MemberId && player1MemberId === player2MemberId) || (key1 && key1 === key2)) {
+    throw new Error('A player cannot be partnered with themselves on the same doubles team.');
+  }
+
+  const { data, error } = await supabase.rpc('update_tournament_participant', {
+    p_participant_id: participantId,
+    p_player1_name: p1,
+    p_player2_name: p2,
+    p_member_id: player1MemberId,
+    p_partner_member_id: player2MemberId,
+  });
+
+  if (!error) {
+    return data as unknown as TournamentParticipant;
+  }
+
+  if (!/update_tournament_participant|function|schema cache|does not exist/i.test(error.message)) {
+    throw error;
+  }
+
+  const { data: fallbackRow, error: uErr } = await supabase
+    .from('tournament_participants')
+    .update({
+      player1_name: p1,
+      player2_name: p2,
+      member_id: player1MemberId,
+      partner_member_id: player2MemberId,
+    })
+    .eq('id', participantId)
+    .select('*')
+    .single();
+
+  if (uErr) throw uErr;
+  return fallbackRow as unknown as TournamentParticipant;
 }
 
 /**
