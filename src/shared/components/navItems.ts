@@ -7,6 +7,7 @@ import {
   Trophy,
   Users,
   type LucideIcon,
+  ScrollText,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -17,6 +18,8 @@ export interface NavItem {
   alsoActiveFor?: string[];
   /** Greyed out and not clickable until the feature ships. */
   comingSoon?: boolean;
+  /** In the sidebar only: the phone's bottom bar has room for just a few items. */
+  desktopOnly?: boolean;
 }
 
 /**
@@ -36,6 +39,7 @@ export const groupNavItems: NavItem[] = [
   { to: '/sessions', label: 'Sessions', icon: CalendarDays },
   { to: '/members', label: 'Members', icon: Users },
   { to: '/courts', label: 'Courts', icon: MapPinned },
+  { to: '/activity', label: 'Activity', icon: ScrollText, desktopOnly: true },
   // Gavin: set comingSoon to false (and point `to` at your route) when ready.
   { to: '/matches', label: 'Matches', icon: Swords, comingSoon: true },
   { to: '/tournaments', label: 'Tournaments', icon: Trophy },

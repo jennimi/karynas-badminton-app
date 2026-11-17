@@ -10,13 +10,16 @@ import { buttonVariants } from '../../shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
 import { Skeleton } from '../../shared/ui/skeleton';
 import { relativeDay, todayString } from '../../shared/utils/format';
+import { ActivityFeed } from '../activity/ActivityFeed';
 import { getGroups } from '../groups/api';
+import { useCurrentGroup } from '../groups/hooks';
 import { GroupDialog } from '../groups/components/GroupDialog';
 import { getUpcomingSessions } from '../sessions/api';
 import { SessionCard } from '../sessions/components/SessionCard';
 
 /** Landing page: your groups and what's coming up. */
 export default function DashboardPage() {
+  const { data: currentGroup } = useCurrentGroup();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
 
@@ -121,6 +124,20 @@ export default function DashboardPage() {
           ))}
         </CardContent>
       </Card>
+
+      {currentGroup && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent activity</CardTitle>
+            <Link to="/activity" className="text-sm font-bold text-brand-strong hover:underline">
+              See all
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <ActivityFeed groupId={currentGroup.id} pageSize={6} compact />
+          </CardContent>
+        </Card>
+      )}
 
       {/* remount on open so the form starts empty each time */}
       {creating && (

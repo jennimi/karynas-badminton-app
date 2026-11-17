@@ -13,6 +13,7 @@ import { Button, buttonVariants } from '../../shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
 import { Input } from '../../shared/ui/input';
 import { formatCost, formatDate, isUpcoming } from '../../shared/utils/format';
+import { ActivityFeed } from '../activity/ActivityFeed';
 import { useSyncCurrentGroup } from '../groups/hooks';
 import { EMOJI_CHOICES, memberEmoji } from '../payments/shareMessage';
 import { getMember, getMemberBills, getMembers, updateMemberColor, updateMemberEmoji } from './api';
@@ -299,6 +300,16 @@ export default function MemberProfilePage() {
             )}
           </>
         )}
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Activity</CardTitle>
+          <span className="text-sm font-semibold text-muted-foreground">by or about {member.name.split(' ')[0]}</span>
+        </CardHeader>
+        <CardContent>
+          <ActivityFeed groupId={member.group_id} memberId={member.id} pageSize={10} compact loadMore />
+        </CardContent>
       </Card>
     </div>
   );

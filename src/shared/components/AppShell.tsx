@@ -66,7 +66,7 @@ export function AppShell({
 }) {
   useSyncFavicon();
   const { pathname } = useLocation();
-  const mobileItems = navItems.filter((n) => !n.comingSoon);
+  const mobileItems = navItems.filter((n) => !n.comingSoon && !n.desktopOnly);
 
   return (
     <div className="min-h-screen bg-background text-foreground">

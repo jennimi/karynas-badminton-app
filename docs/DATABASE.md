@@ -101,6 +101,7 @@ Migration files are in `supabase/migrations/` and are numbered sequentially:
 - `011_tournaments.sql` — `tournaments`, `tournament_participants`, and `tournament_matches` (single-elimination knockout brackets)
 - `014_member_color.sql` — `members.color`: background colour of a member's icon (one of the four accent colours)
 - `013_member_emoji.sql` — `members.emoji`: a member's own icon, also used in the payment message
+- `017_activity_log.sql` — `activity_log`: every change to sessions, payments, members, matches, tournaments and settings, and who did it (written by triggers)
 - `012_group_venues.sql` — `group_venues`: the AYO venues each group checks on the Courts page
 
 ## Payments & admin passcode
@@ -135,3 +136,20 @@ The only way to delete is through functions that check the group's admin passcod
 The buttons only show in admin mode (the "Admin" button in the sidebar / phone header). Removing someone from a session,
 or editing a match, is not a delete and stays open to everyone. `create_match(...)` creates a match and its players in one step
 (it replaced a delete-on-failure clean-up that is no longer allowed).
+
+## Activity log
+
+From `017_activity_log.sql`. Database **triggers** write one line to `activity_log` for every change to sessions, session
+participants (joins, leaves, payment status), costs, members, matches, tournaments (and their scores), venues, the app icon
+and the admin passcode. Because it is the database that writes it, every change is caught, whichever screen made it.
+
+- **Who:** the app sends the member picked in "Who are you?" with every request (header `x-rally-actor`, added in
+  `src/shared/supabase.ts`); the trigger reads it from `request.headers`. There are no accounts, so this is *self-declared*:
+  a label, not proof. No pick, or a change made directly in the SQL editor = "Someone".
+- **Read-only from the app:** `activity_log` can be read by everyone, but inserting, editing and deleting are switched off.
+- **No foreign keys on purpose** (`session_id`, `member_id`, `actor_member_id`): the history must outlive the session or member.
+- **Where it shows:** `/activity` (sidebar, desktop), "Recent activity" on the dashboard (how phones reach it), "History of this
+  session" on a session, and "Activity" on a member's page. Lines of the same kind, by the same person, for the same session within
+  two minutes (e.g. resetting 32 payments) are shown as one expandable line (`groupBursts` in `ActivityFeed.tsx`).
+- **Adding a table to the log:** write a `log_<table>()` trigger function in the same style (branch on `tg_op`: `OLD` doesn't exist on
+  insert and `NEW` doesn't exist on delete) and add the table to the list at the bottom of the migration.

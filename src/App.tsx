@@ -10,6 +10,7 @@ import { useCurrentGroup } from './features/groups/hooks';
 import { AdminToggle } from './features/payments/components/AdminToggle';
 import MembersPage from './features/members/MembersPage';
 import MemberProfilePage from './features/members/MemberProfilePage';
+import ActivityPage from './features/activity/ActivityPage';
 import { MeControl } from './features/members/components/MeControl';
 import CreateSessionPage from './features/sessions/CreateSessionPage';
 import SessionDetailPage from './features/sessions/SessionDetailPage';
@@ -69,6 +70,7 @@ export default function App() {
               <Route path="/members" element={<MembersPage />} />
               <Route path="/members/:id" element={<MemberProfilePage />} />
               <Route path="/courts" element={<CourtsPage />} />
+              <Route path="/activity" element={<ActivityPage />} />
               <Route path="/tournaments" element={<TournamentsPage />} />
               <Route path="/tournaments/:id" element={<TournamentDetailPage />} />
               <Route path="/s/:code" element={<ShortSessionRedirect />} />

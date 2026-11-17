@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -31,6 +32,7 @@ import { useCurrentGroup, useSyncCurrentGroup } from '../groups/hooks';
 import { addMember, getMembers } from '../members/api';
 import { deleteSession, getSession, updateSession } from './api';
 import SessionForm from './components/SessionForm';
+import { ActivityFeed } from '../activity/ActivityFeed';
 import { getMatches } from '../matchmaking/api';
 import { ShufflePairsModal } from '../matchmaking/components/ShufflePairsModal';
 import MatchmakingTab from '../matchmaking/MatchmakingTab';
@@ -47,6 +49,7 @@ export default function SessionDetailPage() {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [shuffleOpen, setShuffleOpen] = useState(false);
   const [tournamentDraftPairs, setTournamentDraftPairs] = useState<
     DraftDoublesPair[] | null
@@ -350,6 +353,23 @@ export default function SessionDetailPage() {
           initialPairs={tournamentDraftPairs}
         />
       )}
+
+      <Card>
+        <button
+          type="button"
+          onClick={() => setShowHistory((v) => !v)}
+          aria-expanded={showHistory}
+          className="flex w-full items-center justify-between rounded-card p-4 text-left text-sm font-extrabold focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          History of this session
+          <ChevronDown className={cn('size-4 transition-transform', showHistory && 'rotate-180')} />
+        </button>
+        {showHistory && (
+          <div className="border-t border-border px-4 pb-4">
+            <ActivityFeed groupId={session.group_id} sessionId={session.id} compact loadMore pageSize={30} />
+          </div>
+        )}
+      </Card>
 
       <ConfirmDialog
         open={confirmDelete}
