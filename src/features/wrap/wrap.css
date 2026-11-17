@@ -1,0 +1,22 @@
+/* Monthly Wrap story cards: each slide fades and slides up, the emoji pops in.
+   Switched off for people who prefer reduced motion. */
+@keyframes wrap-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes wrap-pop {
+  0% { transform: scale(0.4) rotate(-12deg); opacity: 0; }
+  70% { transform: scale(1.15) rotate(4deg); opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+.wrap-slide { animation: wrap-in 0.4s ease-out both; }
+.wrap-pop { animation: wrap-pop 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.1s both; }
+.wrap-rise > * { animation: wrap-in 0.4s ease-out both; }
+.wrap-rise > *:nth-child(2) { animation-delay: 0.08s; }
+.wrap-rise > *:nth-child(3) { animation-delay: 0.16s; }
+.wrap-rise > *:nth-child(4) { animation-delay: 0.24s; }
+.wrap-rise > *:nth-child(5) { animation-delay: 0.32s; }
+.wrap-rise > *:nth-child(6) { animation-delay: 0.4s; }
+@media (prefers-reduced-motion: reduce) {
+  .wrap-slide, .wrap-pop, .wrap-rise > * { animation: none !important; }
+}

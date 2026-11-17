@@ -23,6 +23,7 @@ import { Table, TBody, TD, TH, THead, TR } from '../../shared/ui/table';
 import { Tabs } from '../../shared/ui/tabs';
 import { addDays, todayString } from '../../shared/utils/format';
 import { getMembers } from '../members/api';
+import { OverviewTeasers } from '../stats/components/OverviewTeasers';
 import { MemberTypeBadge } from '../members/components/MemberTypeBadge';
 import { sortMembers, useMemberTypes, type MemberSort } from '../members/memberType';
 import { getAttendance, getSessionSummaries } from '../sessions/api';
@@ -198,6 +199,8 @@ export default function GroupPage() {
           tone="coral"
         />
       </section>
+
+      <OverviewTeasers groupId={group.id} />
 
       <div className="grid gap-6 lg:grid-cols-5">
         <Card className="min-w-0 lg:col-span-3">

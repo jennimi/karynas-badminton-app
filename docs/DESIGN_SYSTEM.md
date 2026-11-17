@@ -118,6 +118,8 @@ personality (group emoji, empty states, greetings) but never as the only carrier
 | `/members` | Add (single / pasted list), rename, remove members |
 | `/members/:id` | One member: "This is me", their emoji icon, unpaid bills, every session with payment status |
 | `/courts` | Free courts at the group's usual venues, read from AYO: date strip, start time, duration, courts needed, players → price per person |
+| `/leaderboard` | Leaderboards (most wins, win rate, most active, best duo, rating, streaks) for All time / 60 days / This month, plus the title hall (`features/stats`) |
+| `/wrap` | Monthly Wrap: a month as tap-through story slides, with a picker for previous months (`features/wrap`) |
 | `/activity` | Activity log: what changed and who did it (filter by type and person); also embedded on the dashboard, session and member pages |
 | `/s/:code` | Compact share link: the code is a session id written in 22 characters (`features/payments/shareMessage.ts`); opens that session on its Payments tab |
 | `/design-kit` | Reference of shared components |

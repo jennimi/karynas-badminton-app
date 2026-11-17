@@ -23,7 +23,9 @@ src/
     members/           Member CRUD + bulk add
     sessions/          Session CRUD + participant management
     courts/            Court availability from AYO for the group's usual venues
-    matchmaking/       Gavin's matchmaking module
+    matchmaking/       Matches inside a session (who played whom, the score)
+    stats/             Leaderboards, per-member stats, session standings and titles, worked out from scored matches (no tables of its own)
+    wrap/              Monthly Wrap: a month of sessions + matches as story slides
     tournaments/       Gavin's tournament module
 api/
   ayo.ts               Serverless function: fetches venue availability from ayo.co

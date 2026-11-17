@@ -8,6 +8,8 @@ import {
   Users,
   type LucideIcon,
   ScrollText,
+  Medal,
+  Sparkles,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -39,6 +41,8 @@ export const groupNavItems: NavItem[] = [
   { to: '/sessions', label: 'Sessions', icon: CalendarDays },
   { to: '/members', label: 'Members', icon: Users },
   { to: '/courts', label: 'Courts', icon: MapPinned },
+  { to: '/leaderboard', label: 'Leaderboard', icon: Medal, desktopOnly: true },
+  { to: '/wrap', label: 'Wrap', icon: Sparkles, desktopOnly: true },
   { to: '/activity', label: 'Activity', icon: ScrollText, desktopOnly: true },
   // Gavin: set comingSoon to false (and point `to` at your route) when ready.
   { to: '/matches', label: 'Matches', icon: Swords, comingSoon: true },

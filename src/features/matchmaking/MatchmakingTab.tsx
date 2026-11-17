@@ -71,7 +71,11 @@ export default function MatchmakingTab({
     queryFn: () => getMatches(session.id),
     retry: false,
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: key });
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: key });
+    // leaderboards, member stats and the monthly wrap are built from the same games
+    queryClient.invalidateQueries({ queryKey: ['games'] });
+  };
 
   const players = useMemo(
     () => session.participants.map((p) => p.member).sort((a, b) => a.name.localeCompare(b.name)),

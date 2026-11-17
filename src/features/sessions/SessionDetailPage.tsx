@@ -33,6 +33,7 @@ import { addMember, getMembers } from '../members/api';
 import { deleteSession, getSession, updateSession } from './api';
 import SessionForm from './components/SessionForm';
 import { ActivityFeed } from '../activity/ActivityFeed';
+import { SessionStandings } from '../stats/components/SessionStandings';
 import { getMatches } from '../matchmaking/api';
 import { ShufflePairsModal } from '../matchmaking/components/ShufflePairsModal';
 import MatchmakingTab from '../matchmaking/MatchmakingTab';
@@ -323,10 +324,13 @@ export default function SessionDetailPage() {
       {/* desktop: matches (main) next to payments */}
       <div className="grid items-start gap-6 lg:grid-cols-5">
         <div className={cn(activeTab === 'matches' ? 'block' : 'hidden', 'min-w-0 lg:col-span-3 lg:block')}>
-          <MatchmakingTab
+          <div className="space-y-6">
+            <MatchmakingTab
             session={session}
             onOpenShuffle={() => setShuffleOpen(true)}
           />
+            <SessionStandings sessionId={session.id} sessionDate={session.date} groupId={session.group_id} />
+          </div>
         </div>
         <div className={cn(activeTab === 'payments' ? 'block' : 'hidden', 'min-w-0 lg:col-span-2 lg:block')}>
           <PaymentPanel session={session} onAddParticipants={() => setIsEditing(true)} />

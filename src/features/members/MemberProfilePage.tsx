@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
 import { Input } from '../../shared/ui/input';
 import { formatCost, formatDate, isUpcoming } from '../../shared/utils/format';
 import { ActivityFeed } from '../activity/ActivityFeed';
+import { MemberStatsCard } from '../stats/components/MemberStatsCard';
 import { useSyncCurrentGroup } from '../groups/hooks';
 import { EMOJI_CHOICES, memberEmoji } from '../payments/shareMessage';
 import { getMember, getMemberBills, getMembers, updateMemberColor, updateMemberEmoji } from './api';
@@ -168,6 +169,8 @@ export default function MemberProfilePage() {
           </Button>
         )}
       </header>
+
+      <MemberStatsCard memberId={member.id} groupId={member.group_id} />
 
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
         <Card>
