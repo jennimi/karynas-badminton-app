@@ -83,7 +83,6 @@ export function buildWrap(input: WrapInput): Wrap {
   const duos = computeDuos(games);
   const players = [...stats.values()];
   const slides: Slide[] = [];
-  const highlights: string[] = [];
 
   slides.push({ id: 'intro', tone: 'brand', emoji: '🏸', kicker: 'Rally Wrapped', headline: label, detail: 'Your month on court. Tap through!' });
 
@@ -99,7 +98,6 @@ export function buildWrap(input: WrapInput): Wrap {
     ...(hoursMin ? [{ label: 'hours on court', value: String(Math.round((hoursMin / 60) * 10) / 10) }] : []),
   ];
   slides.push({ id: 'numbers', tone: 'lime', emoji: '📊', kicker: 'The month in numbers', headline: 'This is what you played', stats: numbers });
-  highlights.push(`${monthSessions.length} session${monthSessions.length === 1 ? '' : 's'}${games.length ? `, ${games.length} matches` : ''}`);
 
   // --- most active (by sessions attended; games break a tie)
   const active = top([...attended.entries()], ([id, n]) => n * 1000 + (stats.get(id)?.games ?? 0), 1000);
@@ -107,7 +105,6 @@ export function buildWrap(input: WrapInput): Wrap {
     const n = active[0][1];
     const ids = active.map(([id]) => id);
     slides.push({ id: 'active', tone: 'coral', emoji: '🔥', kicker: 'Most active', headline: list(ids, nameOf), big: `${n} session${n === 1 ? '' : 's'}`, detail: `out of ${monthSessions.length} this month`, people: ids.slice(0, 3) });
-    highlights.push(`Most active: ${list(ids, nameOf)} (${n} sessions)`);
   }
 
   if (games.length > 0) {
@@ -116,7 +113,6 @@ export function buildWrap(input: WrapInput): Wrap {
     if (wins.length) {
       const ids = wins.map((m) => m.id);
       slides.push({ id: 'wins', tone: 'butter', emoji: '🏆', kicker: 'Most wins', headline: list(ids, nameOf), big: `${wins[0].wins} wins`, detail: `in ${wins[0].games} games`, people: ids.slice(0, 3) });
-      highlights.push(`Most wins: ${list(ids, nameOf)} (${wins[0].wins})`);
     }
     // --- highest win rate (needs a few games, so a lucky 1-0 doesn't count)
     const rate = top(
@@ -127,14 +123,12 @@ export function buildWrap(input: WrapInput): Wrap {
     if (rate.length) {
       const ids = rate.map((m) => m.id);
       slides.push({ id: 'rate', tone: 'lime', emoji: '🎯', kicker: 'Highest win rate', headline: list(ids, nameOf), big: pct(rate[0].winRate), detail: `${rate[0].wins} of ${rate[0].games} games (needs ${WRAP_MIN.games}+ to count)`, people: ids.slice(0, 3) });
-      highlights.push(`Best win rate: ${list(ids, nameOf)} (${pct(rate[0].winRate)})`);
     }
     // --- longest streak
     const streak = top(players, (m) => m.longestStreak, 2);
     if (streak.length) {
       const ids = streak.map((m) => m.id);
       slides.push({ id: 'streak', tone: 'coral', emoji: '⚡', kicker: 'Longest winning streak', headline: list(ids, nameOf), big: `${streak[0].longestStreak} in a row`, detail: 'Unstoppable.', people: ids.slice(0, 3) });
-      highlights.push(`Longest streak: ${list(ids, nameOf)} (${streak[0].longestStreak})`);
     }
     // --- favourite partner(s): who played together the most
     const favourite = top(duos, (d) => d.games, 2)[0];
@@ -146,17 +140,89 @@ export function buildWrap(input: WrapInput): Wrap {
     )[0];
     if (favourite) {
       slides.push({ id: 'pair', tone: 'brand', emoji: '🤝', kicker: 'Favourite pair', headline: list([favourite.a, favourite.b], nameOf), big: `${favourite.games} games together`, detail: favourite.wins === 0 ? 'still chasing that first win together 😅' : `won ${favourite.wins} of them`, people: [favourite.a, favourite.b] });
-      highlights.push(`Favourite pair: ${list([favourite.a, favourite.b], nameOf)}`);
     }
     if (bestDuo && !(favourite && bestDuo.a === favourite.a && bestDuo.b === favourite.b && bestDuo.winRate < 1)) {
       slides.push({ id: 'duo', tone: 'butter', emoji: '💪', kicker: 'Best duo', headline: list([bestDuo.a, bestDuo.b], nameOf), big: pct(bestDuo.winRate), detail: `won ${bestDuo.wins} of ${bestDuo.games} together`, people: [bestDuo.a, bestDuo.b] });
-      highlights.push(`Best duo: ${list([bestDuo.a, bestDuo.b], nameOf)} (${pct(bestDuo.winRate)})`);
     }
     // --- most popular playing partner: partnered with the most different people
     const social = top(players, (m: MemberStats) => m.partners.size, 3);
     if (social.length) {
       const ids = social.map((m) => m.id);
       slides.push({ id: 'social', tone: 'lime', emoji: '🦋', kicker: 'Social butterfly', headline: list(ids, nameOf), big: `${social[0].partners.size} partners`, detail: 'played with the most different people', people: ids.slice(0, 3) });
+    }
+
+    // --- the other side of the court 🥉
+    const losers = top(players, (m) => m.losses, 2);
+    if (losers.length && losers.length < players.length) {
+      const ids = losers.map((m) => m.id);
+      slides.push({ id: 'losses', tone: 'coral', emoji: '🥉', kicker: 'Participation trophy', headline: list(ids, nameOf), big: `${losers[0].losses} losses`, detail: 'Thank you for your service. Someone had to lose, and you did it with heart.', people: ids.slice(0, 3) });
+    }
+    const cold = top(players, (m) => m.longestLoseStreak, 3);
+    if (cold.length) {
+      const ids = cold.map((m) => m.id);
+      slides.push({ id: 'cold', tone: 'butter', emoji: '🥶', kicker: 'Cold case', headline: list(ids, nameOf), big: `${cold[0].longestLoseStreak} losses in a row`, detail: 'Longest losing streak of the month. We are not laughing. (We are laughing.)', people: ids.slice(0, 3) });
+    }
+    const beaten = [...games].sort((a, b) => Math.abs(b.scoreA - b.scoreB) - Math.abs(a.scoreA - a.scoreB))[0];
+    if (beaten && Math.abs(beaten.scoreA - beaten.scoreB) >= 8) {
+      const aWon = beaten.scoreA > beaten.scoreB;
+      const [lost, won] = aWon ? [beaten.teamB, beaten.teamA] : [beaten.teamA, beaten.teamB];
+      const [hi, lo] = [Math.max(beaten.scoreA, beaten.scoreB), Math.min(beaten.scoreA, beaten.scoreB)];
+      slides.push({ id: 'beating', tone: 'lime', emoji: '🐑', kicker: 'Sacrificial lamb', headline: list(lost, nameOf), big: `lost ${lo}–${hi}`, detail: `to ${list(won, nameOf)} on ${formatDate(beaten.date)}. It was not close.`, people: lost.slice(0, 3) });
+    }
+
+    // --- fiercest rivalry: the two people who faced each other the most
+    let rivalry: { a: string; b: string; games: number; aWins: number } | null = null;
+    for (const m of players) {
+      for (const [other, r] of m.rivals) {
+        if (m.id < other && r.games >= 3 && r.games > (rivalry?.games ?? 0)) rivalry = { a: m.id, b: other, games: r.games, aWins: r.wins };
+      }
+    }
+    if (rivalry) {
+      const r = rivalry;
+      const bWins = r.games - r.aWins;
+      slides.push({ id: 'rivalry', tone: 'brand', emoji: '⚔️', kicker: 'Fiercest rivalry', headline: `${first(nameOf(r.a))} vs ${first(nameOf(r.b))}`, big: `${r.aWins}–${bWins}`, detail: `${r.games} games on opposite sides. ${r.aWins === bWins ? 'Perfectly even. Infuriating.' : `${first(nameOf(r.aWins > bWins ? r.a : r.b))} leads.`}`, people: [r.a, r.b] });
+    }
+
+    // --- awards: one silly trophy per quirk
+    const award = (emoji: string, label: string, winners: MemberStats[], detail: (m: MemberStats) => string) =>
+      winners.length ? [{ emoji, text: `${label}: ${list(winners.map((m) => m.id), nameOf)} (${detail(winners[0])})` }] : [];
+    const regulars = players.filter((m) => m.games >= WRAP_MIN.games);
+    const awards = [
+      ...award('🗡️', 'Giant killer', top(players, (m) => m.upsetWins, 1), (m) => `${m.upsetWins} upset win${m.upsetWins === 1 ? '' : 's'}`),
+      ...award('🎯', 'Clutch gene', top(players, (m) => m.closeWins, 2), (m) => `${m.closeWins} close wins`),
+      ...award('💔', 'Heartbreaker', top(players, (m) => m.closeLosses, 2), (m) => `${m.closeLosses} close losses`),
+      ...award('🥯', 'Bagel baker', top(players, (m) => m.bagels, 1), (m) => `${m.bagels} game${m.bagels === 1 ? '' : 's'} on 5 points or fewer`),
+      ...award('🧱', 'The wall', top(regulars, (m) => -m.avgAgainst, -Infinity), (m) => `${m.avgAgainst.toFixed(1)} points against per game`),
+      ...award('💥', 'Full send', top(players, (m) => m.blowoutWins, 1), (m) => `${m.blowoutWins} win${m.blowoutWins === 1 ? '' : 's'} by 10+`),
+      ...award('🎢', 'Rollercoaster', top(regulars, (m) => Math.round(m.peakRating - m.lowRating), 25), (m) => `rating swung ${Math.round(m.peakRating - m.lowRating)} points`),
+      ...award('✨', 'Flawless night', top(players, (m) => m.perfectSessions, 1), () => 'won every game of a session'),
+      ...award('💀', 'Rough night', top(players, (m) => m.winlessSessions, 1), () => 'a whole session without a win'),
+    ];
+    if (awards.length >= 2) {
+      slides.push({ id: 'awards', tone: 'butter', emoji: '🎖️', kicker: 'The awards', headline: 'And the trophies go to…', facts: awards.slice(0, 7) });
+    }
+
+    // --- personalities: everyone who played enough gets a label
+    const archetype = (m: MemberStats): { emoji: string; label: string } => {
+      if (m.games >= WRAP_MIN.games && m.winRate >= 0.75) return { emoji: '🤖', label: 'The Machine' };
+      if (m.comeback) return { emoji: '👑', label: 'Comeback Kid' };
+      if (m.closeLosses >= 2) return { emoji: '💔', label: 'Heartbreak Hotel' };
+      if (m.peakRating - m.lowRating >= 30) return { emoji: '🎢', label: 'Chaos Gremlin' };
+      if (m.partners.size >= 4) return { emoji: '🦋', label: 'Social Butterfly' };
+      if (m.maxGamesInSession >= 5) return { emoji: '🫁', label: 'Cardio Crusader' };
+      if (m.winRate <= 0.34) return { emoji: '🫡', label: 'Lovable Underdog' };
+      if (m.closeWins >= 2) return { emoji: '🎯', label: 'Clutch Gene' };
+      return { emoji: '😎', label: 'Steady Eddie' };
+    };
+    const cast = [...regulars].sort((a, b) => b.games - a.games || b.wins - a.wins).slice(0, 7);
+    if (cast.length >= 3) {
+      slides.push({
+        id: 'personalities', tone: 'lime', emoji: '🎭', kicker: 'Player personalities', headline: 'Who is everyone, really?',
+        facts: cast.map((m) => {
+          const a = archetype(m);
+          return { emoji: a.emoji, text: `${first(nameOf(m.id))}: ${a.label} (${m.wins}–${m.losses})` };
+        }),
+      });
     }
   }
 
@@ -208,7 +274,9 @@ export function buildWrap(input: WrapInput): Wrap {
 
   slides.push({ id: 'outro', tone: 'brand', emoji: '🙌', kicker: label, headline: 'See you on court!', detail: 'Thanks for a great month.' });
 
-  const share = [`🏸 Rally Wrapped: ${label}`, ...highlights.map((h) => `• ${h}`)].join('\n');
+  // no spoilers in the shared text: just an invitation to open the wrap (the page adds the link)
+  const monthName = label.split(' ')[0];
+  const share = `Check out our group's stats ${month === today.slice(0, 7) ? 'this' : 'in'} ${monthName}!`;
   return { month, label, slides, share, sessions: monthSessions.length, matches: games.length };
 }
 

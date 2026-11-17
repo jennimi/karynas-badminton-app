@@ -19,6 +19,7 @@ import AddMemberForm from './components/AddMemberForm';
 import BulkAddMembers from './components/BulkAddMembers';
 import MemberList from './components/MemberList';
 import { SortControl, type SortDir } from '../../shared/components/SortControl';
+import { useAllTimeStats } from '../stats/hooks';
 import { useMe } from './useMe';
 import { memberTypeInfo, sortMembers, useMemberTypes, type MemberSort, type MemberType } from './memberType';
 
@@ -27,6 +28,7 @@ export default function MembersPage() {
   const { data: group } = useCurrentGroup();
   const admin = useAdmin(group?.id);
   const me = useMe(group?.id);
+  const all = useAllTimeStats(group?.id); // titles shown under each name
   const [query, setQuery] = useState('');
   const [toRemove, setToRemove] = useState<Member | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -242,6 +244,7 @@ export default function MembersPage() {
             <MemberList
               members={filtered}
               types={types}
+              titles={all.titles.byMember}
               meId={me.memberId}
               onDelete={admin.isAdmin ? setToRemove : undefined}
               onRename={(id, name) => renameMutation.mutate({ id, name })}

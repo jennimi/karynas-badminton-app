@@ -16,9 +16,12 @@ import { formatCost, formatDate, isUpcoming } from '../../shared/utils/format';
 import { ActivityFeed } from '../activity/ActivityFeed';
 import { useAdmin } from '../payments/useAdmin';
 import { MemberStatsCard } from '../stats/components/MemberStatsCard';
+import { TitleChip } from '../stats/components/TitleChip';
+import { useAllTimeStats } from '../stats/hooks';
 import { useSyncCurrentGroup } from '../groups/hooks';
 import { EMOJI_CHOICES, memberEmoji } from '../payments/shareMessage';
 import { getMember, getMemberBills, getMembers, updateMemberColor, updateMemberEmoji } from './api';
+import { MemberPicker } from './components/MemberPicker';
 import { MemberTypeBadge } from './components/MemberTypeBadge';
 import { useMemberTypes } from './memberType';
 import { useMe } from './useMe';
@@ -78,6 +81,8 @@ export default function MemberProfilePage() {
   useSyncCurrentGroup(member?.group_id);
   const me = useMe(member?.group_id);
   const admin = useAdmin(member?.group_id);
+  const allStats = useAllTimeStats(member?.group_id);
+  const earned = member ? (allStats.titles.byMember.get(member.id) ?? []) : [];
   const isMe = !!member && me.memberId === member.id;
 
   const { data: members = [] } = useQuery({
@@ -142,19 +147,30 @@ export default function MemberProfilePage() {
 
   return (
     <div className="space-y-6">
-      <Link to="/members" className="inline-flex items-center gap-1.5 text-sm font-bold text-brand-strong hover:underline">
-        <ArrowLeft className="size-4" /> Members
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link to="/members" className="inline-flex items-center gap-1.5 text-sm font-bold text-brand-strong hover:underline">
+          <ArrowLeft className="size-4" /> Members
+        </Link>
+        {/* look at anyone's stats without having to be them */}
+        <MemberPicker members={members} currentId={member.id} />
+      </div>
 
       <header className="flex flex-wrap items-center gap-4">
         <Avatar name={member.name} emoji={member.emoji} color={member.color} className="size-16 text-2xl" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-3xl font-extrabold tracking-tight">{member.name}</h1>
+            <h1 className="min-w-0 break-words text-2xl sm:text-3xl font-extrabold tracking-tight">{member.name}</h1>
             {isMe && <Badge variant="brand">You</Badge>}
             <MemberTypeBadge result={type} />
           </div>
           {type && <p className="mt-1 max-w-prose text-sm text-muted-foreground">{type.why}</p>}
+          {earned.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {earned.map((t) => (
+                <TitleChip key={t.key} titleKey={t.key} value={t.value} />
+              ))}
+            </div>
+          )}
         </div>
         {isMe ? (
           <Button variant="outline" onClick={me.clear}>
@@ -162,6 +178,7 @@ export default function MemberProfilePage() {
           </Button>
         ) : (
           <Button
+            variant="outline"
             onClick={() => {
               me.become(member.id);
               toast.success(`Hi ${member.name} 👋 Remembered until you close this tab.`);

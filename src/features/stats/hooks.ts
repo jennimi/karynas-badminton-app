@@ -1,25 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { addDays, todayString } from '../../shared/utils/format';
+import { todayString } from '../../shared/utils/format';
 import { getAttendance, getSessionSummaries } from '../sessions/api';
 import { getGroupGames } from './api';
-import { attendanceStreaks, buildBoards, computeDuos, computeStats, type Game } from './compute';
+import { SEASON_MIN_GAMES, attendanceStreaks, buildBoards, computeDuos, computeStats, seasonChampions, seasonOf, type Game } from './compute';
 import { computeTitles } from './titles';
 
-export type Period = 'all' | '60d' | 'month';
+/** 'all' = all time, otherwise a season: a month written YYYY-MM (ratings start again every month). */
+export type Period = string;
 
-export const PERIODS: { value: Period; label: string }[] = [
-  { value: 'all', label: 'All time' },
-  { value: '60d', label: '60 days' },
-  { value: 'month', label: 'This month' },
-];
-
-export function inPeriod(games: Game[], period: Period): Game[] {
-  const today = todayString();
-  if (period === 'all') return games;
-  if (period === '60d') return games.filter((g) => g.date >= addDays(today, -60));
-  return games.filter((g) => g.date.startsWith(today.slice(0, 7)));
-}
+export const inPeriod = (games: Game[], period: Period): Game[] => (period === 'all' ? games : games.filter((g) => seasonOf(g.date) === period));
 
 /** Every finished game of the group. Refreshed whenever a match is saved. */
 export function useGames(groupId: string | undefined) {
@@ -51,7 +41,15 @@ export function useAllTimeStats(groupId: string | undefined) {
     const stats = computeStats(list);
     const duos = computeDuos(list);
     const streaks = attendanceStreaks(sessions.data ?? [], attendance.data ?? [], todayString());
-    return { stats, duos, titles: computeTitles(stats, duos, streaks), boards: buildBoards(stats, duos) };
+    // this month's season: ratings that started again at 1000 on the 1st
+    const season = seasonOf(todayString());
+    const seasonGames = inPeriod(list, season);
+    const seasonStats = computeStats(seasonGames);
+    const seasonBoards = buildBoards(seasonStats, computeDuos(seasonGames), SEASON_MIN_GAMES);
+    return {
+      stats, duos, titles: computeTitles(stats, duos, streaks), boards: buildBoards(stats, duos),
+      season, seasonStats, seasonBoards, champions: seasonChampions(list),
+    };
   }, [games.data, sessions.data, attendance.data]);
 
   return { ...computed, games: games.data ?? [], isLoading: games.isLoading, error: games.error as Error | null };

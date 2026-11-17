@@ -119,6 +119,7 @@ personality (group emoji, empty states, greetings) but never as the only carrier
 | `/members/:id` | One member: "This is me", their emoji icon, unpaid bills, every session with payment status |
 | `/courts` | Free courts at the group's usual venues, read from AYO: date strip, start time, duration, courts needed, players → price per person |
 | `/leaderboard` | Leaderboards (most wins, win rate, most active, best duo, rating, streaks) for All time / 60 days / This month, plus the title hall (`features/stats`) |
+| `/how-it-works` | Plain-words explanation of the rating (with a game-by-game breakdown for any member), the minimum-games rule and every title; linked from the leaderboard and a member's rating |
 | `/wrap` | Monthly Wrap: a month as tap-through story slides, with a picker for previous months (`features/wrap`) |
 | `/activity` | Activity log: what changed and who did it (filter by type and person). **Admin only** (migration 018): without admin mode the page only shows a private notice; it is also embedded on the dashboard, session and member pages, and hidden there too |
 | `/s/:code` | Compact share link: the code is a session id written in 22 characters (`features/payments/shareMessage.ts`); opens that session on its Payments tab |
@@ -150,3 +151,5 @@ sidebar, and looping in `RallyLoader`. Switched off for `prefers-reduced-motion`
 
 **Adding or replacing icons:** drop a new collection image into `design/`, adjust the grid in
 `extract-brand-icons.py` if the layout differs, and add the entries to `RALLY_ICONS`.
+
+- **FitText** (`shared/ui/fit-text.tsx`): big numbers/headlines that must not overflow on a phone. Give it the full-size class; it steps the font down until it fits (`lines`, `minPx`). Used in the Wrap, stat tiles and leaderboard rows.

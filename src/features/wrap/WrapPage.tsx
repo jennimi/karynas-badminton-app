@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Copy, MessageCircle, RotateCcw } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, Copy, MessageCircle, Play, RotateCcw, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { RallyLoader } from '../../shared/components/brand/RallyLoader';
@@ -9,7 +10,7 @@ import { PageHeader } from '../../shared/components/PageHeader';
 import { cn } from '../../shared/lib/cn';
 import type { Member } from '../../shared/types';
 import { Avatar } from '../../shared/ui/avatar';
-import { Button } from '../../shared/ui/button';
+import { FitText } from '../../shared/ui/fit-text';
 import { Card } from '../../shared/ui/card';
 import { todayString } from '../../shared/utils/format';
 import { useCurrentGroup } from '../groups/hooks';
@@ -29,30 +30,26 @@ const TONE: Record<Tone, string> = {
 
 function SlideView({ slide, members }: { slide: Slide; members: Map<string, Member> }) {
   return (
-    <div
-      className={cn(
-        'wrap-slide relative flex min-h-[22rem] flex-col items-center justify-center gap-3 overflow-hidden rounded-card px-6 py-10 text-center text-ink sm:min-h-[30rem]',
-        TONE[slide.tone],
-        (slide.id === 'intro' || slide.id === 'outro') && 'bg-linear-to-br from-brand via-brand to-lime'
-      )}
-    >
-      {/* soft decoration */}
-      <span aria-hidden="true" className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-ink/10" />
-      <span aria-hidden="true" className="pointer-events-none absolute -bottom-12 -left-8 size-36 rounded-full bg-ink/10" />
-
-      <div className="wrap-rise relative flex flex-col items-center gap-3">
-        <p className="text-xs font-extrabold uppercase tracking-widest opacity-80">{slide.kicker}</p>
-        <span className="wrap-pop text-6xl" aria-hidden="true">
+    <div className="wrap-slide relative mx-auto flex min-h-full w-full max-w-xl flex-col items-center justify-center gap-3 px-6 py-6 text-center">
+      <div className="wrap-rise relative flex w-full flex-col items-center gap-3">
+        <p className="max-w-full break-words text-xs font-extrabold uppercase tracking-widest opacity-80">{slide.kicker}</p>
+        <span className="wrap-pop text-[min(6rem,13dvh)] leading-none" aria-hidden="true">
           {slide.emoji}
         </span>
-        <h2 className="max-w-md text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">{slide.headline}</h2>
-        {slide.big && <p className="text-4xl font-extrabold tracking-tight sm:text-5xl">{slide.big}</p>}
+        <FitText as="h2" lines={2} minPx={18} className="w-full text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">
+          {slide.headline}
+        </FitText>
+        {slide.big && (
+          <FitText minPx={20} className="w-full text-5xl font-extrabold leading-tight tracking-tight sm:text-6xl">
+            {slide.big}
+          </FitText>
+        )}
 
         {slide.people && slide.people.length > 0 && (
           <div className="flex -space-x-3" aria-hidden="true">
             {slide.people.map((id) => {
               const m = members.get(id);
-              return <Avatar key={id} name={m?.name ?? '?'} emoji={m?.emoji} color={m?.color} className="size-16 text-xl ring-4" />;
+              return <Avatar key={id} name={m?.name ?? '?'} emoji={m?.emoji} color={m?.color} className="size-14 text-xl ring-4 sm:size-16" />;
             })}
           </div>
         )}
@@ -60,9 +57,11 @@ function SlideView({ slide, members }: { slide: Slide; members: Map<string, Memb
         {slide.stats && (
           <dl className="grid w-full max-w-sm grid-cols-2 gap-3">
             {slide.stats.map((s) => (
-              <div key={s.label} className="rounded-2xl bg-ink/10 px-3 py-4">
-                <dd className="text-4xl font-extrabold tabular-nums">{s.value}</dd>
-                <dt className="text-xs font-bold opacity-80">{s.label}</dt>
+              <div key={s.label} className="min-w-0 rounded-2xl bg-ink/10 px-3 py-4">
+                <FitText as="dd" minPx={16} className="text-4xl font-extrabold tabular-nums">
+                  {s.value}
+                </FitText>
+                <dt className="break-words text-xs font-bold opacity-80">{s.label}</dt>
               </div>
             ))}
           </dl>
@@ -71,38 +70,51 @@ function SlideView({ slide, members }: { slide: Slide; members: Map<string, Memb
         {slide.facts && (
           <ul className="w-full max-w-md space-y-2 text-left">
             {slide.facts.map((f) => (
-              <li key={f.text} className="flex items-start gap-3 rounded-2xl bg-ink/10 px-4 py-2.5 text-sm font-bold">
+              <li key={f.text} className="flex items-start gap-3 rounded-2xl bg-ink/10 px-4 py-2.5 text-[clamp(0.75rem,3.6vw,0.875rem)] font-bold">
                 <span aria-hidden="true" className="text-lg leading-snug">
                   {f.emoji}
                 </span>
-                {f.text}
+                <span className="min-w-0 break-words">{f.text}</span>
               </li>
             ))}
           </ul>
         )}
 
-        {slide.detail && <p className="max-w-sm text-sm font-bold opacity-85">{slide.detail}</p>}
+        {slide.detail && <p className="max-w-sm break-words text-[clamp(0.8rem,3.8vw,0.875rem)] font-bold opacity-85">{slide.detail}</p>}
       </div>
     </div>
   );
 }
 
-/** The slides, one at a time: tap Next, swipe, or use the arrow keys. */
-function Story({ wrap, members }: { wrap: Wrap; members: Map<string, Member> }) {
+const ghost =
+  'inline-flex h-11 cursor-pointer items-center justify-center gap-1.5 rounded-full bg-ink/10 px-4 text-sm font-extrabold text-ink transition-colors hover:bg-ink/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:pointer-events-none disabled:opacity-40';
+
+/**
+ * The slides, full screen like Instagram stories: tap the right side (or Next / arrow key) to go on, the
+ * left side to go back, swipe, or press Esc / the X to close.
+ */
+function Story({ wrap, members, onClose }: { wrap: Wrap; members: Map<string, Member>; onClose: () => void }) {
   const [i, setI] = useState(0);
   const last = wrap.slides.length - 1;
   const go = (n: number) => setI(Math.max(0, Math.min(last, n)));
   const touchX = useRef<number | null>(null);
+  const slide = wrap.slides[i];
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.closest('input, textarea, select')) return;
-      if (e.key === 'ArrowRight') setI((n) => Math.min(last, n + 1));
+      if (e.key === 'ArrowRight' || e.key === ' ') setI((n) => Math.min(last, n + 1));
       if (e.key === 'ArrowLeft') setI((n) => Math.max(0, n - 1));
+      if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [last]);
+    // the page underneath must not scroll while the story is open
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [last, onClose]);
 
   const shareText = `${wrap.share}\n${window.location.origin}/wrap?month=${wrap.month}`;
   const copy = async () => {
@@ -114,24 +126,45 @@ function Story({ wrap, members }: { wrap: Wrap; members: Map<string, Member> }) 
     }
   };
 
-  return (
-    <div className="mx-auto w-full max-w-xl space-y-3">
-      <div className="flex gap-1.5" role="group" aria-label="Slides">
-        {wrap.slides.map((s, n) => (
-          <button
-            key={s.id}
-            type="button"
-            aria-label={`Go to slide ${n + 1} of ${wrap.slides.length}`}
-            aria-current={n === i}
-            onClick={() => go(n)}
-            className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          >
-            <span className={cn('block h-full rounded-full bg-brand transition-all duration-300', n <= i ? 'w-full' : 'w-0')} />
-          </button>
-        ))}
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${wrap.label} wrap`}
+      className={cn(
+        'wrap-screen fixed inset-0 z-[100] flex h-dvh flex-col overflow-hidden text-ink transition-colors duration-300',
+        TONE[slide.tone],
+        (slide.id === 'intro' || slide.id === 'outro') && 'bg-linear-to-br from-brand via-brand to-lime'
+      )}
+    >
+      {/* soft decoration */}
+      <span aria-hidden="true" className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-ink/10" />
+      <span aria-hidden="true" className="pointer-events-none absolute -bottom-20 -left-12 size-52 rounded-full bg-ink/10" />
+
+      {/* progress + close */}
+      <div className="relative z-20 flex items-center gap-3 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="flex flex-1 gap-1" role="group" aria-label="Slides">
+          {wrap.slides.map((s, n) => (
+            <button
+              key={s.id}
+              type="button"
+              aria-label={`Go to slide ${n + 1} of ${wrap.slides.length}`}
+              aria-current={n === i}
+              onClick={() => go(n)}
+              className="h-1.5 flex-1 cursor-pointer overflow-hidden rounded-full bg-ink/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              <span className={cn('block h-full rounded-full bg-ink transition-all duration-300', n <= i ? 'w-full' : 'w-0')} />
+            </button>
+          ))}
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close wrap" className={cn(ghost, 'size-10 shrink-0 px-0')}>
+          <X className="size-5" />
+        </button>
       </div>
 
+      {/* the slide, with invisible tap zones: left third = back, the rest = next */}
       <div
+        className="relative min-h-0 flex-1 overflow-y-auto"
         onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
         onTouchEnd={(e) => {
           if (touchX.current == null) return;
@@ -141,38 +174,53 @@ function Story({ wrap, members }: { wrap: Wrap; members: Map<string, Member> }) 
         }}
         aria-live="polite"
       >
-        <SlideView key={wrap.slides[i].id} slide={wrap.slides[i]} members={members} />
+        <button type="button" tabIndex={-1} aria-hidden="true" onClick={() => go(i - 1)} className="absolute inset-y-0 left-0 z-10 w-[30%] cursor-w-resize" />
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden="true"
+          onClick={() => (i < last ? go(i + 1) : undefined)}
+          className="absolute inset-y-0 right-0 z-10 w-[70%] cursor-e-resize"
+        />
+        <SlideView key={slide.id} slide={slide} members={members} />
       </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <Button variant="outline" onClick={() => go(i - 1)} disabled={i === 0} aria-label="Previous slide">
-          <ChevronLeft /> Back
-        </Button>
-        <span className="text-xs font-bold text-muted-foreground">
-          {i + 1} / {wrap.slides.length}
-        </span>
-        {i < last ? (
-          <Button onClick={() => go(i + 1)} aria-label="Next slide">
-            Next <ChevronRight />
-          </Button>
-        ) : (
-          <Button variant="secondary" onClick={() => go(0)}>
-            <RotateCcw /> Replay
-          </Button>
+      {/* controls */}
+      <div className="relative z-20 flex flex-col gap-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
+        {i === last && (
+          <div className="mx-auto flex flex-wrap justify-center gap-2">
+            <button type="button" onClick={copy} className={ghost}>
+              <Copy className="size-4" /> Copy summary
+            </button>
+            <button
+              type="button"
+              onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank', 'noopener')}
+              className={ghost}
+            >
+              <MessageCircle className="size-4" /> WhatsApp
+            </button>
+          </div>
         )}
-      </div>
-
-      {i === last && (
-        <div className="flex flex-wrap justify-center gap-2 pt-1">
-          <Button onClick={copy}>
-            <Copy /> Copy summary
-          </Button>
-          <Button variant="lime" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank', 'noopener')}>
-            <MessageCircle /> WhatsApp
-          </Button>
+        <div className="mx-auto flex w-full max-w-xl items-center justify-between gap-2">
+          <button type="button" onClick={() => go(i - 1)} disabled={i === 0} aria-label="Previous slide" className={ghost}>
+            <ChevronLeft className="size-4" /> Back
+          </button>
+          <span className="text-xs font-extrabold opacity-80">
+            {i + 1} / {wrap.slides.length}
+          </span>
+          {i < last ? (
+            <button type="button" onClick={() => go(i + 1)} aria-label="Next slide" className={cn(ghost, 'bg-ink text-brand hover:bg-ink/85')}>
+              Next <ChevronRight className="size-4" />
+            </button>
+          ) : (
+            <button type="button" onClick={() => go(0)} className={ghost}>
+              <RotateCcw className="size-4" /> Replay
+            </button>
+          )}
         </div>
-      )}
-    </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -189,8 +237,10 @@ export default function WrapPage() {
   const games = useGames(gid);
 
   const months = useMemo(() => wrapMonths(sessions.data ?? [], today), [sessions.data, today]);
+  // /wrap?month=2026-05 opens that month's story full screen; /wrap alone lists the months
   const asked = params.get('month');
-  const month = asked && months.includes(asked) ? asked : months[0];
+  const month = asked && months.includes(asked) ? asked : undefined;
+  const close = useCallback(() => setParams({}, { replace: true }), [setParams]);
 
   const byId = useMemo(() => new Map((members.data ?? []).map((m) => [m.id, m])), [members.data]);
   const wrap = useMemo(
@@ -212,7 +262,7 @@ export default function WrapPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Monthly Wrap" description="A month of badminton, Spotify-Wrapped style." />
+      <PageHeader title="Monthly Wrap" description="A month of badminton, Spotify-Wrapped style. Pick a month and it opens full screen." />
 
       {loading ? (
         <RallyLoader message="Putting your wrap together…" />
@@ -222,24 +272,30 @@ export default function WrapPage() {
         </Card>
       ) : (
         <>
-          <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Choose a month">
-            {months.map((m) => (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" role="list" aria-label="Choose a month">
+            {months.map((m, n) => (
               <button
                 key={m}
                 type="button"
-                aria-pressed={m === month}
-                onClick={() => setParams({ month: m }, { replace: true })}
+                role="listitem"
+                onClick={() => setParams({ month: m })}
                 className={cn(
-                  'shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-                  m === month ? 'bg-brand text-ink' : 'bg-muted text-muted-foreground hover:text-foreground'
+                  'group flex min-w-0 cursor-pointer items-center gap-3 rounded-card p-4 text-left text-ink transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+                  ['bg-brand', 'bg-lime', 'bg-butter', 'bg-coral'][n % 4]
                 )}
               >
-                {monthLabel(m).replace(/ 20(\d\d)$/, " '$1")}
-                {m === today.slice(0, 7) && <span className="ml-1 font-semibold opacity-70">· so far</span>}
+                <span className="text-3xl" aria-hidden="true">
+                  {['🏸', '🔥', '🏆', '✨'][n % 4]}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-lg font-extrabold">{monthLabel(m)}</span>
+                  <span className="block text-xs font-bold opacity-80">{m === today.slice(0, 7) ? 'So far this month' : 'Tap to watch'}</span>
+                </span>
+                <Play className="size-5 shrink-0 transition-transform group-hover:scale-110" aria-hidden="true" />
               </button>
             ))}
           </div>
-          {wrap && <Story key={wrap.month} wrap={wrap} members={byId} />}
+          {month && wrap && <Story key={wrap.month} wrap={wrap} members={byId} onClose={close} />}
         </>
       )}
     </div>
