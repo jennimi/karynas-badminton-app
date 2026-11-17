@@ -358,6 +358,8 @@ export default function SessionDetailPage() {
         />
       )}
 
+      {/* the activity log is private to the admin */}
+      {admin.isAdmin && (
       <Card>
         <button
           type="button"
@@ -374,6 +376,7 @@ export default function SessionDetailPage() {
           </div>
         )}
       </Card>
+      )}
 
       <ConfirmDialog
         open={confirmDelete}

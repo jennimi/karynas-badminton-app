@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useState } from 'react';
+import { Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { cn } from '../../shared/lib/cn';
 import { Alert } from '../../shared/ui/alert';
@@ -20,6 +21,8 @@ import { Button } from '../../shared/ui/button';
 import { Skeleton } from '../../shared/ui/skeleton';
 import { addDays, formatCost, formatDate, todayString } from '../../shared/utils/format';
 import { getMembers } from '../members/api';
+import { AdminDialog } from '../payments/components/AdminDialog';
+import { useAdmin } from '../payments/useAdmin';
 import { getActivity, type ActivityEntity, type ActivityFilter, type ActivityRow } from './api';
 
 const ENTITY: Record<ActivityEntity, { icon: LucideIcon; tone: keyof typeof avatarTones; label: string }> = {
@@ -194,20 +197,40 @@ export function ActivityFeed({
   ...filter
 }: Omit<ActivityFilter, 'limit'> & { compact?: boolean; loadMore?: boolean; pageSize?: number }) {
   const [limit, setLimit] = useState(pageSize);
+  const admin = useAdmin(filter.groupId);
+  const [unlocking, setUnlocking] = useState(false);
   const { data: members = [] } = useQuery({
     queryKey: ['members', filter.groupId],
     queryFn: () => getMembers(filter.groupId),
   });
   const { data: rows, isLoading, error } = useQuery({
-    queryKey: ['activity', filter, limit],
-    queryFn: () => getActivity({ ...filter, limit }),
+    // the passcode is not part of the key; being admin is
+    queryKey: ['activity', filter, limit, admin.isAdmin],
+    queryFn: () => getActivity({ ...filter, limit }, admin.code!),
+    enabled: admin.isAdmin,
     // new entries show up when someone comes back to the tab
     refetchOnWindowFocus: true,
     staleTime: 15_000,
     retry: false,
   });
 
+  // the log is private: without admin mode there is nothing to show
+  if (!admin.isAdmin) {
+    return (
+      <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border p-6 text-center">
+        <Lock className="size-5 text-muted-foreground" />
+        <p className="text-sm font-bold">The activity log is private</p>
+        <p className="text-xs text-muted-foreground">Only the admin can see who changed what.</p>
+        <Button size="sm" variant="outline" onClick={() => setUnlocking(true)}>
+          Unlock admin mode
+        </Button>
+        {unlocking && <AdminDialog groupId={filter.groupId} onClose={() => setUnlocking(false)} />}
+      </div>
+    );
+  }
   if (error) {
+    // a wrong or expired passcode: lock again so it can be re-entered
+    if (/only the admin/i.test((error as Error).message)) admin.lock();
     return (
       <Alert>
         <p>{(error as Error).message}</p>

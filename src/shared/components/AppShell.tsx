@@ -58,15 +58,18 @@ export function AppShell({
   groupSwitcher,
   adminControl,
   profileControl,
+  isAdmin = false,
 }: {
   groupSwitcher?: ReactNode;
   adminControl?: ReactNode;
   /** "Who are you?" button (features/members): full width in the sidebar, compact on phones. */
   profileControl?: ReactNode;
+  /** Admin mode is on: shows the items marked `adminOnly` (e.g. the activity log). */
+  isAdmin?: boolean;
 }) {
   useSyncFavicon();
   const { pathname } = useLocation();
-  const mobileItems = navItems.filter((n) => !n.comingSoon && !n.desktopOnly);
+  const mobileItems = navItems.filter((n) => !n.comingSoon && !n.desktopOnly && (!n.adminOnly || isAdmin));
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -87,7 +90,7 @@ export function AppShell({
             </span>
             {groupSwitcher}
             <div className="flex flex-col gap-1">
-              {groupNavItems.map((item) => (
+              {groupNavItems.filter((n) => !n.adminOnly || isAdmin).map((item) => (
                 <SidebarLink key={item.to} item={item} pathname={pathname} />
               ))}
             </div>

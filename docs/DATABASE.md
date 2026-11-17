@@ -101,6 +101,7 @@ Migration files are in `supabase/migrations/` and are numbered sequentially:
 - `011_tournaments.sql` — `tournaments`, `tournament_participants`, and `tournament_matches` (single-elimination knockout brackets)
 - `014_member_color.sql` — `members.color`: background colour of a member's icon (one of the four accent colours)
 - `013_member_emoji.sql` — `members.emoji`: a member's own icon, also used in the payment message
+- `018_admin_only_activity_log.sql` — the activity log can only be read by the admin (`get_activity(group, code, …)`); direct reads are switched off
 - `017_activity_log.sql` — `activity_log`: every change to sessions, payments, members, matches, tournaments and settings, and who did it (written by triggers)
 - `012_group_venues.sql` — `group_venues`: the AYO venues each group checks on the Courts page
 
@@ -146,7 +147,7 @@ and the admin passcode. Because it is the database that writes it, every change 
 - **Who:** the app sends the member picked in "Who are you?" with every request (header `x-rally-actor`, added in
   `src/shared/supabase.ts`); the trigger reads it from `request.headers`. There are no accounts, so this is *self-declared*:
   a label, not proof. No pick, or a change made directly in the SQL editor = "Someone".
-- **Read-only from the app:** `activity_log` can be read by everyone, but inserting, editing and deleting are switched off.
+- **Admin only:** since `018_admin_only_activity_log.sql`, the app cannot read, insert, edit or delete `activity_log` directly. The only way to read it is `get_activity(group, passcode, …)`, which checks the admin passcode in the database (like `set_session_cost` and the deletes). Without admin mode the app shows a "private" notice and hides every place the log appears (sidebar item, dashboard card, session history, member card).
 - **No foreign keys on purpose** (`session_id`, `member_id`, `actor_member_id`): the history must outlive the session or member.
 - **Where it shows:** `/activity` (sidebar, desktop), "Recent activity" on the dashboard (how phones reach it), "History of this
   session" on a session, and "Activity" on a member's page. Lines of the same kind, by the same person, for the same session within

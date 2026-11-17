@@ -30,22 +30,21 @@ export interface ActivityFilter {
   limit: number;
 }
 
-export async function getActivity(f: ActivityFilter): Promise<ActivityRow[]> {
-  let q = supabase
-    .from('activity_log')
-    .select('*')
-    // settings changes belong to no group
-    .or(`group_id.eq.${f.groupId},group_id.is.null`)
-    .order('at', { ascending: false })
-    .order('id', { ascending: false })
-    .limit(f.limit);
-  if (f.entities?.length) q = q.in('entity', f.entities);
-  if (f.actorId === 'none') q = q.is('actor_member_id', null);
-  else if (f.actorId) q = q.eq('actor_member_id', f.actorId);
-  if (f.sessionId) q = q.eq('session_id', f.sessionId);
-  if (f.memberId) q = q.or(`member_id.eq.${f.memberId},actor_member_id.eq.${f.memberId}`);
-
-  const { data, error } = await q;
-  if (error) throw friendlyRpcError(error.message, '017_activity_log.sql');
+/** Admin only: the database checks the passcode (supabase/migrations/018_admin_only_activity_log.sql). */
+export async function getActivity(f: ActivityFilter, adminCode: string): Promise<ActivityRow[]> {
+  const { data, error } = await supabase.rpc('get_activity', {
+    p_group: f.groupId,
+    p_code: adminCode,
+    p_limit: f.limit,
+    p_entities: f.entities?.length ? f.entities : null,
+    p_actor: f.actorId && f.actorId !== 'none' ? f.actorId : null,
+    p_actor_none: f.actorId === 'none',
+    p_session: f.sessionId ?? null,
+    p_member: f.memberId ?? null,
+  });
+  if (error) {
+    if (/only the admin/i.test(error.message)) throw new Error(error.message);
+    throw friendlyRpcError(error.message, '018_admin_only_activity_log.sql');
+  }
   return (data ?? []) as ActivityRow[];
 }

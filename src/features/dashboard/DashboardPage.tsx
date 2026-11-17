@@ -13,6 +13,7 @@ import { relativeDay, todayString } from '../../shared/utils/format';
 import { ActivityFeed } from '../activity/ActivityFeed';
 import { getGroups } from '../groups/api';
 import { useCurrentGroup } from '../groups/hooks';
+import { useAdmin } from '../payments/useAdmin';
 import { GroupDialog } from '../groups/components/GroupDialog';
 import { getUpcomingSessions } from '../sessions/api';
 import { SessionCard } from '../sessions/components/SessionCard';
@@ -20,6 +21,7 @@ import { SessionCard } from '../sessions/components/SessionCard';
 /** Landing page: your groups and what's coming up. */
 export default function DashboardPage() {
   const { data: currentGroup } = useCurrentGroup();
+  const admin = useAdmin(currentGroup?.id);
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
 
@@ -125,7 +127,7 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {currentGroup && (
+      {currentGroup && admin.isAdmin && (
         <Card>
           <CardHeader>
             <CardTitle>Recent activity</CardTitle>

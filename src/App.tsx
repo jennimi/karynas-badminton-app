@@ -8,6 +8,7 @@ import ChatImportPage from './features/chat-import/ChatImportPage';
 import { GroupSwitcher } from './features/groups/components/GroupSwitcher';
 import { useCurrentGroup } from './features/groups/hooks';
 import { AdminToggle } from './features/payments/components/AdminToggle';
+import { useAdmin } from './features/payments/useAdmin';
 import MembersPage from './features/members/MembersPage';
 import MemberProfilePage from './features/members/MemberProfilePage';
 import ActivityPage from './features/activity/ActivityPage';
@@ -45,6 +46,20 @@ function ShortSessionRedirect() {
   );
 }
 
+/** The page frame, told whether admin mode is on (so admin-only menu items appear). */
+function Shell() {
+  const { data: group } = useCurrentGroup();
+  const admin = useAdmin(group?.id);
+  return (
+    <AppShell
+      groupSwitcher={<GroupSwitcher />}
+      adminControl={<AdminToggle />}
+      profileControl={<MeControl />}
+      isAdmin={admin.isAdmin}
+    />
+  );
+}
+
 /** `/group` → the page of the group picked in the sidebar. */
 function CurrentGroupRedirect() {
   const { data: group } = useCurrentGroup();
@@ -62,7 +77,7 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <Routes>
-            <Route element={<AppShell groupSwitcher={<GroupSwitcher />} adminControl={<AdminToggle />} profileControl={<MeControl />} />}>
+            <Route element={<Shell />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/group" element={<CurrentGroupRedirect />} />
               <Route path="/groups/:id" element={<GroupPage />} />

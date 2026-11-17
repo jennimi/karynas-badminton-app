@@ -8,6 +8,7 @@ import { Skeleton } from '../../shared/ui/skeleton';
 import { useCurrentGroup } from '../groups/hooks';
 import { getMembers } from '../members/api';
 import { useMe } from '../members/useMe';
+import { useAdmin } from '../payments/useAdmin';
 import type { ActivityEntity } from './api';
 import { ActivityFeed } from './ActivityFeed';
 
@@ -24,6 +25,7 @@ const KINDS: { key: string; label: string; entities?: ActivityEntity[] }[] = [
 export default function ActivityPage() {
   const { data: group } = useCurrentGroup();
   const me = useMe(group?.id);
+  const admin = useAdmin(group?.id);
   const [params] = useSearchParams();
   const [kind, setKind] = useState(params.get('type') ?? 'all');
   const [who, setWho] = useState('anyone');
@@ -36,8 +38,9 @@ export default function ActivityPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Activity" description="Everything that was changed here, and who did it." />
+      <PageHeader title="Activity" description="Everything that was changed here, and who did it. Private: admin only." />
 
+      {admin.isAdmin && (
       <div className="flex flex-wrap items-center gap-2">
         {KINDS.map((k) => (
           <button
@@ -73,6 +76,7 @@ export default function ActivityPage() {
           </select>
         </label>
       </div>
+      )}
 
       <Card>
         <CardContent>
@@ -90,10 +94,12 @@ export default function ActivityPage() {
         </CardContent>
       </Card>
 
+      {admin.isAdmin && (
       <p className="text-xs text-muted-foreground">
         There are no accounts yet, so “who” is the member picked under “Who are you?”. If nobody was picked, or
         the change was made in the database directly, it shows as “Someone”. Entries can’t be edited or removed here.
       </p>
+      )}
     </div>
   );
 }

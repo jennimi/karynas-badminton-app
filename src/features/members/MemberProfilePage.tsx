@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
 import { Input } from '../../shared/ui/input';
 import { formatCost, formatDate, isUpcoming } from '../../shared/utils/format';
 import { ActivityFeed } from '../activity/ActivityFeed';
+import { useAdmin } from '../payments/useAdmin';
 import { MemberStatsCard } from '../stats/components/MemberStatsCard';
 import { useSyncCurrentGroup } from '../groups/hooks';
 import { EMOJI_CHOICES, memberEmoji } from '../payments/shareMessage';
@@ -76,6 +77,7 @@ export default function MemberProfilePage() {
   const member = memberQuery.data;
   useSyncCurrentGroup(member?.group_id);
   const me = useMe(member?.group_id);
+  const admin = useAdmin(member?.group_id);
   const isMe = !!member && me.memberId === member.id;
 
   const { data: members = [] } = useQuery({
@@ -305,6 +307,8 @@ export default function MemberProfilePage() {
         )}
       </Card>
 
+      {/* the activity log is private to the admin */}
+      {admin.isAdmin && (
       <Card>
         <CardHeader>
           <CardTitle>Activity</CardTitle>
@@ -314,6 +318,7 @@ export default function MemberProfilePage() {
           <ActivityFeed groupId={member.group_id} memberId={member.id} pageSize={10} compact loadMore />
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

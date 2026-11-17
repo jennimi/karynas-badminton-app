@@ -20,6 +20,8 @@ export interface NavItem {
   alsoActiveFor?: string[];
   /** Greyed out and not clickable until the feature ships. */
   comingSoon?: boolean;
+  /** Only shown while admin mode is on. */
+  adminOnly?: boolean;
   /** In the sidebar only: the phone's bottom bar has room for just a few items. */
   desktopOnly?: boolean;
 }
@@ -43,7 +45,7 @@ export const groupNavItems: NavItem[] = [
   { to: '/courts', label: 'Courts', icon: MapPinned },
   { to: '/leaderboard', label: 'Leaderboard', icon: Medal, desktopOnly: true },
   { to: '/wrap', label: 'Wrap', icon: Sparkles, desktopOnly: true },
-  { to: '/activity', label: 'Activity', icon: ScrollText, desktopOnly: true },
+  { to: '/activity', label: 'Activity', icon: ScrollText, desktopOnly: true, adminOnly: true },
   // Gavin: set comingSoon to false (and point `to` at your route) when ready.
   { to: '/matches', label: 'Matches', icon: Swords, comingSoon: true },
   { to: '/tournaments', label: 'Tournaments', icon: Trophy },

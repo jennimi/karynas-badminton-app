@@ -120,7 +120,7 @@ personality (group emoji, empty states, greetings) but never as the only carrier
 | `/courts` | Free courts at the group's usual venues, read from AYO: date strip, start time, duration, courts needed, players → price per person |
 | `/leaderboard` | Leaderboards (most wins, win rate, most active, best duo, rating, streaks) for All time / 60 days / This month, plus the title hall (`features/stats`) |
 | `/wrap` | Monthly Wrap: a month as tap-through story slides, with a picker for previous months (`features/wrap`) |
-| `/activity` | Activity log: what changed and who did it (filter by type and person); also embedded on the dashboard, session and member pages |
+| `/activity` | Activity log: what changed and who did it (filter by type and person). **Admin only** (migration 018): without admin mode the page only shows a private notice; it is also embedded on the dashboard, session and member pages, and hidden there too |
 | `/s/:code` | Compact share link: the code is a session id written in 22 characters (`features/payments/shareMessage.ts`); opens that session on its Payments tab |
 | `/design-kit` | Reference of shared components |
 
