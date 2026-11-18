@@ -151,6 +151,15 @@ function TournamentListCard({ tournament }: { tournament: TournamentSummary }) {
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="truncate text-lg font-extrabold">{tournament.name}</h2>
               <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+              <Badge
+                variant={
+                  tournament.format === 'double_elimination' ? 'brand' : 'neutral'
+                }
+              >
+                {tournament.format === 'double_elimination'
+                  ? 'Double Elim'
+                  : 'Single Elim'}
+              </Badge>
             </div>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-semibold text-muted-foreground">

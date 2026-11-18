@@ -1,10 +1,14 @@
 import type { Member } from '../../shared/types';
 import { cleanName, nameKey } from '../../shared/utils/nameParser';
 import type {
+  BracketType,
   DraftDoublesPair,
   MatchPlayerConflict,
+  TournamentFormat,
   TournamentMatch,
   TournamentParticipant,
+  TournamentParticipantWithMember,
+  TournamentStandings,
   TournamentStatus,
 } from './types';
 
@@ -15,6 +19,7 @@ export interface SeededParticipantInput {
 
 export interface GeneratedMatchBlueprint {
   tempKey: string;
+  bracket_type: BracketType;
   round: number;
   match_order: number;
   participant1_id: string | null;
@@ -24,6 +29,13 @@ export interface GeneratedMatchBlueprint {
   winner_id: string | null;
   nextMatchTempKey: string | null;
   next_match_slot: 1 | 2 | null;
+  loserMatchTempKey: string | null;
+  loser_match_slot: 1 | 2 | null;
+}
+
+export interface GenerateBracketOptions {
+  format?: TournamentFormat;
+  hasGrandFinalReset?: boolean;
 }
 
 export interface DownstreamMatchPatch {
@@ -282,12 +294,242 @@ export function getRoundLabel(round: number, totalRounds: number): string {
 }
 
 /**
+ * Stage-aware round label supporting Single Elimination and Double Elimination brackets.
+ */
+export function getBracketRoundLabel(
+  bracketType: BracketType,
+  round: number,
+  totalRoundsInBracket: number,
+  format: TournamentFormat = 'single_elimination'
+): string {
+  if (format === 'single_elimination') {
+    return getRoundLabel(round, totalRoundsInBracket);
+  }
+  if (bracketType === 'grand_final') {
+    return 'Grand Final';
+  }
+  if (bracketType === 'grand_final_reset') {
+    return 'Grand Final Reset';
+  }
+
+  const remaining = totalRoundsInBracket - round;
+  const prefix = bracketType === 'loser' ? 'Losers' : 'Winners';
+  if (remaining === 0) return `${prefix} Finals`;
+  if (remaining === 1) return `${prefix} Semifinals`;
+  if (bracketType === 'winner' && remaining === 2) {
+    return 'Winners Quarterfinals';
+  }
+  return `${prefix} Round ${round}`;
+}
+
+/**
+ * Returns true if a match is an automatic Round 1 BYE (single seeded pair auto-advanced).
+ */
+export function isRound1ByeMatch(
+  match: Pick<
+    TournamentMatch,
+    'round' | 'participant1_id' | 'participant2_id' | 'winner_id' | 'score_1' | 'score_2'
+  > & { bracket_type?: BracketType }
+): boolean {
+  const bracketType = match.bracket_type ?? 'winner';
+  return (
+    bracketType === 'winner' &&
+    match.round === 1 &&
+    ((match.participant1_id !== null && match.participant2_id === null) ||
+      (match.participant1_id === null && match.participant2_id !== null)) &&
+    match.winner_id !== null &&
+    match.score_1 === null &&
+    match.score_2 === null
+  );
+}
+
+/**
+ * Returns true if a Grand Final Reset match is actually triggered/playable.
+ */
+export function isResetMatchActive(
+  resetMatch: Pick<
+    TournamentMatch,
+    'bracket_type' | 'participant1_id' | 'participant2_id' | 'winner_id'
+  >,
+  allMatches: Pick<
+    TournamentMatch,
+    'bracket_type' | 'participant1_id' | 'participant2_id' | 'winner_id'
+  >[]
+): boolean {
+  if (resetMatch.bracket_type !== 'grand_final_reset') return true;
+  if (
+    (resetMatch.participant1_id !== null && resetMatch.participant2_id !== null) ||
+    resetMatch.winner_id !== null
+  ) {
+    return true;
+  }
+  const grandFinal = allMatches.find((m) => m.bracket_type === 'grand_final');
+  return Boolean(
+    grandFinal &&
+      grandFinal.winner_id !== null &&
+      grandFinal.winner_id === grandFinal.participant2_id
+  );
+}
+
+/**
+ * Filter matches down to playable matches (excluding Round 1 BYEs and unneeded Grand Final Resets).
+ */
+export function getPlayableMatches<
+  T extends Pick<
+    TournamentMatch,
+    | 'round'
+    | 'participant1_id'
+    | 'participant2_id'
+    | 'winner_id'
+    | 'score_1'
+    | 'score_2'
+  > & { bracket_type?: BracketType },
+>(matches: T[]): T[] {
+  return matches.filter((m) => {
+    if (isRound1ByeMatch(m)) return false;
+    if (m.bracket_type === 'grand_final_reset') {
+      return isResetMatchActive(
+        {
+          bracket_type: m.bracket_type,
+          participant1_id: m.participant1_id,
+          participant2_id: m.participant2_id,
+          winner_id: m.winner_id,
+        },
+        matches.map((item) => ({
+          bracket_type: item.bracket_type ?? 'winner',
+          participant1_id: item.participant1_id,
+          participant2_id: item.participant2_id,
+          winner_id: item.winner_id,
+        }))
+      );
+    }
+    return true;
+  });
+}
+
+/**
+ * Describe where the losing pair of a match drops (or whether a loss eliminates them).
+ */
+export function getLoserDestinationLabel(
+  match: TournamentMatch,
+  allMatches: TournamentMatch[],
+  format: TournamentFormat
+): string | null {
+  if (format === 'single_elimination') {
+    return null;
+  }
+  if (match.bracket_type === 'loser') {
+    return 'Loser is eliminated';
+  }
+  if (match.bracket_type === 'grand_final') {
+    const hasReset = allMatches.some((m) => m.bracket_type === 'grand_final_reset');
+    if (!hasReset) {
+      return 'Championship deciding match';
+    }
+    return 'LB champ win forces Grand Final Reset';
+  }
+  if (match.bracket_type === 'grand_final_reset') {
+    return 'Winner-take-all Championship match';
+  }
+  if (!match.loser_match_id) {
+    return null;
+  }
+  const target = allMatches.find((m) => m.id === match.loser_match_id);
+  if (!target) return null;
+  if (target.bracket_type === 'grand_final') {
+    return 'Loser drops to Grand Final';
+  }
+  const loserMatches = allMatches.filter((m) => m.bracket_type === 'loser');
+  const maxLoserRound = loserMatches.reduce((max, m) => Math.max(max, m.round), 1);
+  if (target.round === maxLoserRound) {
+    return 'Loser drops to Losers Finals';
+  }
+  if (target.round === maxLoserRound - 1 && maxLoserRound >= 2) {
+    return 'Loser drops to Losers Semifinals';
+  }
+  return `Loser → Losers R${target.round} #${target.match_order}`;
+}
+
+/**
+ * Compute Top 4 placements (1st, 2nd, 3rd, 4th) for a tournament.
+ */
+export function computeTournamentStandings(
+  matches: TournamentMatch[],
+  participants: TournamentParticipantWithMember[],
+  format: TournamentFormat = 'single_elimination'
+): TournamentStandings {
+  const byId = new Map<string, TournamentParticipantWithMember>();
+  for (const p of participants) {
+    byId.set(p.id, p);
+  }
+
+  const getLoserId = (m: TournamentMatch | undefined): string | null => {
+    if (!m || !m.winner_id) return null;
+    if (m.winner_id === m.participant1_id) return m.participant2_id;
+    if (m.winner_id === m.participant2_id) return m.participant1_id;
+    return null;
+  };
+
+  if (format === 'single_elimination') {
+    const maxRound = matches.reduce((max, m) => Math.max(max, m.round), 0);
+    const finalMatch =
+      matches.find((m) => m.round === maxRound && m.next_match_id === null) ??
+      matches.find((m) => m.round === maxRound);
+    const first = finalMatch?.winner_id ? (byId.get(finalMatch.winner_id) ?? null) : null;
+    const secondId = getLoserId(finalMatch);
+    const second = secondId ? (byId.get(secondId) ?? null) : null;
+    return { first, second, third: null, fourth: null };
+  }
+
+  const gfMatch = matches.find((m) => m.bracket_type === 'grand_final');
+  const gfrMatch = matches.find((m) => m.bracket_type === 'grand_final_reset');
+
+  let decidingMatch: TournamentMatch | undefined;
+  if (gfrMatch?.winner_id) {
+    decidingMatch = gfrMatch;
+  } else if (
+    gfMatch?.winner_id &&
+    (gfMatch.winner_id === gfMatch.participant1_id || !gfrMatch)
+  ) {
+    decidingMatch = gfMatch;
+  }
+
+  const first = decidingMatch?.winner_id
+    ? (byId.get(decidingMatch.winner_id) ?? null)
+    : null;
+  const secondId = getLoserId(decidingMatch);
+  const second = secondId ? (byId.get(secondId) ?? null) : null;
+
+  const loserMatches = matches.filter((m) => m.bracket_type === 'loser');
+  const maxLoserRound = loserMatches.reduce((max, m) => Math.max(max, m.round), 0);
+  const lbFinal =
+    maxLoserRound > 0
+      ? loserMatches.find((m) => m.round === maxLoserRound)
+      : undefined;
+
+  const thirdId = getLoserId(lbFinal);
+  const third = thirdId ? (byId.get(thirdId) ?? null) : null;
+
+  let fourth: TournamentParticipantWithMember | null = null;
+  if (participants.length >= 4 && lbFinal && maxLoserRound >= 2) {
+    const lbSemifinal = loserMatches.find(
+      (m) => m.round === maxLoserRound - 1 && m.next_match_id === lbFinal.id
+    );
+    const fourthId = getLoserId(lbSemifinal);
+    fourth = fourthId ? (byId.get(fourthId) ?? null) : null;
+  }
+
+  return { first, second, third, fourth };
+}
+
+/**
  * Pre-generates all knockout bracket matches across all rounds, distributes
  * seeded doubles pairs using standard bracket seeding, and automatically advances
- * Round 1 BYEs into Round 2.
+ * Round 1 BYEs. Supports both Single Elimination and Double Elimination formats.
  */
 export function generateBracketMatches(
-  participants: SeededParticipantInput[]
+  participants: SeededParticipantInput[],
+  options?: GenerateBracketOptions
 ): GeneratedMatchBlueprint[] {
   if (participants.length < 2) {
     throw new Error('At least 2 doubles pairs are required to generate a bracket');
@@ -299,6 +541,19 @@ export function generateBracketMatches(
     return sa - sb;
   });
 
+  if (options?.format === 'double_elimination') {
+    return generateDoubleEliminationMatches(
+      ordered,
+      options.hasGrandFinalReset ?? true
+    );
+  }
+
+  return generateSingleEliminationMatches(ordered);
+}
+
+function generateSingleEliminationMatches(
+  ordered: SeededParticipantInput[]
+): GeneratedMatchBlueprint[] {
   const bracketSize = nextPowerOfTwo(ordered.length);
   const totalRounds = Math.round(Math.log2(bracketSize));
 
@@ -314,6 +569,7 @@ export function generateBracketMatches(
       const nextSlot: 1 | 2 | null = hasNext ? (order % 2 === 1 ? 1 : 2) : null;
       const node: GeneratedMatchBlueprint = {
         tempKey,
+        bracket_type: 'winner',
         round,
         match_order: order,
         participant1_id: null,
@@ -323,6 +579,8 @@ export function generateBracketMatches(
         winner_id: null,
         nextMatchTempKey: hasNext ? `R${round + 1}-M${nextOrder}` : null,
         next_match_slot: nextSlot,
+        loserMatchTempKey: null,
+        loser_match_slot: null,
       };
       byKey.set(tempKey, node);
       allMatches.push(node);
@@ -341,27 +599,16 @@ export function generateBracketMatches(
     r1Match.participant1_id = p1;
     r1Match.participant2_id = p2;
 
-    if (p1 && !p2) {
-      r1Match.winner_id = p1;
+    const byeWinner = p1 && !p2 ? p1 : !p1 && p2 ? p2 : null;
+    if (byeWinner) {
+      r1Match.winner_id = byeWinner;
       if (r1Match.nextMatchTempKey && r1Match.next_match_slot) {
         const nextMatch = byKey.get(r1Match.nextMatchTempKey);
         if (nextMatch) {
           if (r1Match.next_match_slot === 1) {
-            nextMatch.participant1_id = p1;
+            nextMatch.participant1_id = byeWinner;
           } else {
-            nextMatch.participant2_id = p1;
-          }
-        }
-      }
-    } else if (!p1 && p2) {
-      r1Match.winner_id = p2;
-      if (r1Match.nextMatchTempKey && r1Match.next_match_slot) {
-        const nextMatch = byKey.get(r1Match.nextMatchTempKey);
-        if (nextMatch) {
-          if (r1Match.next_match_slot === 1) {
-            nextMatch.participant1_id = p2;
-          } else {
-            nextMatch.participant2_id = p2;
+            nextMatch.participant2_id = byeWinner;
           }
         }
       }
@@ -372,11 +619,318 @@ export function generateBracketMatches(
 }
 
 /**
+ * Generates a full Double Elimination bracket (Winners Bracket, compacted Losers Bracket
+ * without phantom BYE matches, Grand Final, and optional Grand Final Reset) with
+ * cross-bracketed loser drops to avoid immediate rematches.
+ */
+function generateDoubleEliminationMatches(
+  ordered: SeededParticipantInput[],
+  hasGrandFinalReset: boolean
+): GeneratedMatchBlueprint[] {
+  const bracketSize = nextPowerOfTwo(ordered.length);
+  const k = Math.round(Math.log2(bracketSize));
+
+  // Degenerate 2-team Double Elimination: WB Match 1 feeds both GF slots
+  if (bracketSize === 2) {
+    const gfKey = 'GF-R1-M1';
+    const gfrKey = 'GFR-R1-M1';
+    const wb1: GeneratedMatchBlueprint = {
+      tempKey: 'WB-R1-M1',
+      bracket_type: 'winner',
+      round: 1,
+      match_order: 1,
+      participant1_id: ordered[0]?.id ?? null,
+      participant2_id: ordered[1]?.id ?? null,
+      score_1: null,
+      score_2: null,
+      winner_id: null,
+      nextMatchTempKey: gfKey,
+      next_match_slot: 1,
+      loserMatchTempKey: gfKey,
+      loser_match_slot: 2,
+    };
+    const gf: GeneratedMatchBlueprint = {
+      tempKey: gfKey,
+      bracket_type: 'grand_final',
+      round: 1,
+      match_order: 1,
+      participant1_id: null,
+      participant2_id: null,
+      score_1: null,
+      score_2: null,
+      winner_id: null,
+      nextMatchTempKey: hasGrandFinalReset ? gfrKey : null,
+      next_match_slot: hasGrandFinalReset ? 1 : null,
+      loserMatchTempKey: null,
+      loser_match_slot: null,
+    };
+    const result = [wb1, gf];
+    if (hasGrandFinalReset) {
+      result.push({
+        tempKey: gfrKey,
+        bracket_type: 'grand_final_reset',
+        round: 2,
+        match_order: 1,
+        participant1_id: null,
+        participant2_id: null,
+        score_1: null,
+        score_2: null,
+        winner_id: null,
+        nextMatchTempKey: null,
+        next_match_slot: null,
+        loserMatchTempKey: null,
+        loser_match_slot: null,
+      });
+    }
+    return result;
+  }
+
+  const gfKey = 'GF-R1-M1';
+  const gfrKey = 'GFR-R1-M1';
+  const byKey = new Map<string, GeneratedMatchBlueprint>();
+
+  // 1. Upper / Winners Bracket (k rounds)
+  for (let round = 1; round <= k; round++) {
+    const matchesInRound = bracketSize / Math.pow(2, round);
+    for (let order = 1; order <= matchesInRound; order++) {
+      const tempKey = `WB-R${round}-M${order}`;
+      const isWbFinal = round === k;
+      const nextOrder = Math.ceil(order / 2);
+      const nextSlot: 1 | 2 = isWbFinal ? 1 : order % 2 === 1 ? 1 : 2;
+      const nextMatchTempKey = isWbFinal ? gfKey : `WB-R${round + 1}-M${nextOrder}`;
+
+      let loserMatchTempKey: string | null = null;
+      let loserSlot: 1 | 2 | null = null;
+      if (round === 1) {
+        loserMatchTempKey = `LB-R1-M${Math.ceil(order / 2)}`;
+        loserSlot = order % 2 === 1 ? 1 : 2;
+      } else {
+        const s = round - 1;
+        const dropCount = bracketSize / Math.pow(2, s + 1);
+        const crossOrder = dropCount + 1 - order;
+        loserMatchTempKey = `LB-R${2 * s}-M${crossOrder}`;
+        loserSlot = 1;
+      }
+
+      byKey.set(tempKey, {
+        tempKey,
+        bracket_type: 'winner',
+        round,
+        match_order: order,
+        participant1_id: null,
+        participant2_id: null,
+        score_1: null,
+        score_2: null,
+        winner_id: null,
+        nextMatchTempKey,
+        next_match_slot: nextSlot,
+        loserMatchTempKey,
+        loser_match_slot: loserSlot,
+      });
+    }
+  }
+
+  // 2. Uncompacted Lower / Losers Bracket (2 * (k - 1) rounds)
+  const totalUncompactedLbRounds = 2 * (k - 1);
+  for (let s = 1; s <= k - 1; s++) {
+    const count = bracketSize / Math.pow(2, s + 1);
+    const minorRound = 2 * s - 1;
+    const majorRound = 2 * s;
+
+    for (let order = 1; order <= count; order++) {
+      const minorKey = `LB-R${minorRound}-M${order}`;
+      byKey.set(minorKey, {
+        tempKey: minorKey,
+        bracket_type: 'loser',
+        round: minorRound,
+        match_order: order,
+        participant1_id: null,
+        participant2_id: null,
+        score_1: null,
+        score_2: null,
+        winner_id: null,
+        nextMatchTempKey: `LB-R${majorRound}-M${order}`,
+        next_match_slot: 2,
+        loserMatchTempKey: null,
+        loser_match_slot: null,
+      });
+
+      const majorKey = `LB-R${majorRound}-M${order}`;
+      const isLbFinal = s === k - 1;
+      byKey.set(majorKey, {
+        tempKey: majorKey,
+        bracket_type: 'loser',
+        round: majorRound,
+        match_order: order,
+        participant1_id: null,
+        participant2_id: null,
+        score_1: null,
+        score_2: null,
+        winner_id: null,
+        nextMatchTempKey: isLbFinal ? gfKey : `LB-R${majorRound + 1}-M${Math.ceil(order / 2)}`,
+        next_match_slot: isLbFinal ? 2 : order % 2 === 1 ? 1 : 2,
+        loserMatchTempKey: null,
+        loser_match_slot: null,
+      });
+    }
+  }
+
+  // 3. Seed WB Round 1 and resolve Round 1 BYEs without dropping phantom losers into LB
+  const seedPairs = getStandardSeedPairs(bracketSize);
+  seedPairs.forEach(([seed1, seed2], idx) => {
+    const matchOrder = idx + 1;
+    const r1Match = byKey.get(`WB-R1-M${matchOrder}`);
+    if (!r1Match) return;
+
+    const p1 = ordered[seed1 - 1]?.id ?? null;
+    const p2 = ordered[seed2 - 1]?.id ?? null;
+
+    r1Match.participant1_id = p1;
+    r1Match.participant2_id = p2;
+
+    const byeWinner = p1 && !p2 ? p1 : !p1 && p2 ? p2 : null;
+    if (byeWinner) {
+      r1Match.winner_id = byeWinner;
+      r1Match.loserMatchTempKey = null;
+      r1Match.loser_match_slot = null;
+
+      if (r1Match.nextMatchTempKey && r1Match.next_match_slot) {
+        const nextMatch = byKey.get(r1Match.nextMatchTempKey);
+        if (nextMatch) {
+          if (r1Match.next_match_slot === 1) {
+            nextMatch.participant1_id = byeWinner;
+          } else {
+            nextMatch.participant2_id = byeWinner;
+          }
+        }
+      }
+    }
+  });
+
+  // 4. Prune phantom LB matches (0 or 1 incoming team paths due to WB R1 BYEs)
+  for (let lbRound = 1; lbRound <= totalUncompactedLbRounds; lbRound++) {
+    const roundNodes = Array.from(byKey.values())
+      .filter((m) => m.bracket_type === 'loser' && m.round === lbRound)
+      .sort((a, b) => a.match_order - b.match_order);
+
+    for (const node of roundNodes) {
+      const feeders: Array<{
+        source: GeneratedMatchBlueprint;
+        via: 'winner' | 'loser';
+      }> = [];
+
+      for (const candidate of byKey.values()) {
+        if (candidate.nextMatchTempKey === node.tempKey) {
+          feeders.push({ source: candidate, via: 'winner' });
+        }
+        if (candidate.loserMatchTempKey === node.tempKey) {
+          feeders.push({ source: candidate, via: 'loser' });
+        }
+      }
+
+      if (feeders.length === 0) {
+        byKey.delete(node.tempKey);
+      } else if (feeders.length === 1) {
+        const { source, via } = feeders[0];
+        if (via === 'winner') {
+          source.nextMatchTempKey = node.nextMatchTempKey;
+          source.next_match_slot = node.next_match_slot;
+        } else {
+          source.loserMatchTempKey = node.nextMatchTempKey;
+          source.loser_match_slot = node.next_match_slot;
+        }
+        byKey.delete(node.tempKey);
+      }
+    }
+  }
+
+  // 5. Compact surviving LB round numbers and match orders sequentially (1..R, 1..M)
+  const survivingLbMatches = Array.from(byKey.values()).filter(
+    (m) => m.bracket_type === 'loser'
+  );
+  const survivingRoundNums = Array.from(
+    new Set(survivingLbMatches.map((m) => m.round))
+  ).sort((a, b) => a - b);
+
+  const keyRemap = new Map<string, string>();
+  survivingRoundNums.forEach((oldRound, roundIdx) => {
+    const newRound = roundIdx + 1;
+    const matchesInRound = survivingLbMatches
+      .filter((m) => m.round === oldRound)
+      .sort((a, b) => a.match_order - b.match_order);
+
+    matchesInRound.forEach((m, orderIdx) => {
+      const newOrder = orderIdx + 1;
+      const newKey = `LB-R${newRound}-M${newOrder}`;
+      keyRemap.set(m.tempKey, newKey);
+      m.round = newRound;
+      m.match_order = newOrder;
+    });
+  });
+
+  for (const m of byKey.values()) {
+    m.tempKey = keyRemap.get(m.tempKey) ?? m.tempKey;
+    if (m.nextMatchTempKey) {
+      m.nextMatchTempKey = keyRemap.get(m.nextMatchTempKey) ?? m.nextMatchTempKey;
+    }
+    if (m.loserMatchTempKey) {
+      m.loserMatchTempKey = keyRemap.get(m.loserMatchTempKey) ?? m.loserMatchTempKey;
+    }
+  }
+
+  // 6. Grand Final & optional Grand Final Reset
+  const grandFinal: GeneratedMatchBlueprint = {
+    tempKey: gfKey,
+    bracket_type: 'grand_final',
+    round: 1,
+    match_order: 1,
+    participant1_id: null,
+    participant2_id: null,
+    score_1: null,
+    score_2: null,
+    winner_id: null,
+    nextMatchTempKey: hasGrandFinalReset ? gfrKey : null,
+    next_match_slot: hasGrandFinalReset ? 1 : null,
+    loserMatchTempKey: null,
+    loser_match_slot: null,
+  };
+
+  const result: GeneratedMatchBlueprint[] = [
+    ...Array.from(byKey.values()).filter((m) => m.bracket_type === 'winner'),
+    ...Array.from(byKey.values())
+      .filter((m) => m.bracket_type === 'loser')
+      .sort((a, b) => a.round - b.round || a.match_order - b.match_order),
+    grandFinal,
+  ];
+
+  if (hasGrandFinalReset) {
+    result.push({
+      tempKey: gfrKey,
+      bracket_type: 'grand_final_reset',
+      round: 2,
+      match_order: 1,
+      participant1_id: null,
+      participant2_id: null,
+      score_1: null,
+      score_2: null,
+      winner_id: null,
+      nextMatchTempKey: null,
+      next_match_slot: null,
+      loserMatchTempKey: null,
+      loser_match_slot: null,
+    });
+  }
+
+  return result;
+}
+
+/**
  * Pure helper that supports:
  * 1. Immediate winner selection WITHOUT requiring scores (`score1 = null, score2 = null`).
  * 2. Editing scores BEFORE a winner is chosen (`winnerId = null`, scores saved on the match).
  * 3. Editing scores AFTER a winner is chosen, or switching the winner in case of human error,
- *    automatically cascading the corrected winner down `next_match_id` slots.
+ *    automatically cascading updates & rollbacks down BOTH `next_match_id` and `loser_match_id`.
+ * 4. Grand Final Game 1 -> Grand Final Reset activation & deactivation.
  */
 export function computeScorePropagation(
   match: TournamentMatch,
@@ -397,9 +951,6 @@ export function computeScorePropagation(
     throw new Error('Score 2 must be a whole number (0 or higher).');
   }
 
-  // Determine resulting winner_id:
-  // - If explicitWinnerId is passed (including null to keep match in-progress/reset winner), respect it!
-  // - Otherwise infer from score1 vs score2 if both scores are provided and unequal.
   let resolvedWinnerId: string | null = null;
   if (explicitWinnerId !== undefined) {
     if (
@@ -416,12 +967,17 @@ export function computeScorePropagation(
     resolvedWinnerId = null;
   }
 
-  const oldWinnerId = match.winner_id;
-  const downstreamPatches: DownstreamMatchPatch[] = [];
+  const resolvedLoserId: string | null =
+    resolvedWinnerId === match.participant1_id
+      ? match.participant2_id
+      : resolvedWinnerId === match.participant2_id
+        ? match.participant1_id
+        : null;
 
-  // Map of match state after applying our changes so we can accurately check Finals completion
+  const originalById = new Map<string, TournamentMatch>();
   const matchById = new Map<string, TournamentMatch>();
   for (const m of allMatches) {
+    originalById.set(m.id, m);
     matchById.set(m.id, { ...m });
   }
 
@@ -432,71 +988,156 @@ export function computeScorePropagation(
     updatedCurrent.winner_id = resolvedWinnerId;
   }
 
-  // Propagate to immediate next_match_id and cascade if a human error changed/cleared a previous winner
-  if (match.next_match_id && match.next_match_slot) {
-    const immediateNext = matchById.get(match.next_match_id);
-    if (immediateNext) {
-      const slotField =
-        match.next_match_slot === 1 ? 'participant1_id' : 'participant2_id';
+  const clearResetMatch = (resetMatchId: string) => {
+    const resetMatch = matchById.get(resetMatchId);
+    if (!resetMatch || resetMatch.bracket_type !== 'grand_final_reset') return;
+    resetMatch.participant1_id = null;
+    resetMatch.participant2_id = null;
+    resetMatch.winner_id = null;
+    resetMatch.score_1 = null;
+    resetMatch.score_2 = null;
+  };
 
-      const immediatePatch: DownstreamMatchPatch['patch'] = {
-        [slotField]: resolvedWinnerId,
-      };
-      immediateNext[slotField] = resolvedWinnerId;
+  const visitedSlots = new Set<string>();
+  const assignMatchSlot = (
+    targetMatchId: string | null | undefined,
+    slot: 1 | 2 | null | undefined,
+    nextParticipantId: string | null
+  ) => {
+    if (!targetMatchId || !slot) return;
+    const visitKey = `${targetMatchId}:${slot}:${nextParticipantId ?? 'null'}`;
+    if (visitedSlots.has(visitKey)) return;
+    visitedSlots.add(visitKey);
 
-      // If the winner changed (or was cleared) and the immediate next match had already
-      // recorded the old winner as winning THAT match too, clear the stale downstream result
-      // and continue clearing oldWinnerId further down the tree.
-      if (oldWinnerId && oldWinnerId !== resolvedWinnerId) {
-        if (immediateNext.winner_id === oldWinnerId) {
-          immediatePatch.winner_id = null;
-          immediateNext.winner_id = null;
-        }
-        downstreamPatches.push({
-          matchId: immediateNext.id,
-          patch: immediatePatch,
-        });
+    const target = matchById.get(targetMatchId);
+    if (!target) return;
 
-        // Walk any deeper rounds where oldWinnerId was mistakenly advanced
-        let cursor = immediateNext;
-        while (cursor.next_match_id && cursor.next_match_slot) {
-          const deeper = matchById.get(cursor.next_match_id);
-          if (!deeper) break;
-          const deeperSlotField =
-            cursor.next_match_slot === 1 ? 'participant1_id' : 'participant2_id';
-          if (deeper[deeperSlotField] !== oldWinnerId) break;
+    const slotField = slot === 1 ? 'participant1_id' : 'participant2_id';
+    const prevParticipantId = target[slotField];
+    if (prevParticipantId === nextParticipantId) return;
 
-          const deeperPatch: DownstreamMatchPatch['patch'] = {
-            [deeperSlotField]: null,
-          };
-          deeper[deeperSlotField] = null;
-          if (deeper.winner_id === oldWinnerId) {
-            deeperPatch.winner_id = null;
-            deeper.winner_id = null;
-          }
-          downstreamPatches.push({
-            matchId: deeper.id,
-            patch: deeperPatch,
-          });
-          cursor = deeper;
+    const hadResult =
+      prevParticipantId !== null &&
+      (target.winner_id !== null ||
+        target.score_1 !== null ||
+        target.score_2 !== null);
+
+    target[slotField] = nextParticipantId;
+
+    if (hadResult) {
+      target.winner_id = null;
+      target.score_1 = null;
+      target.score_2 = null;
+
+      if (target.bracket_type === 'grand_final') {
+        if (target.next_match_id) {
+          clearResetMatch(target.next_match_id);
         }
       } else {
-        downstreamPatches.push({
-          matchId: immediateNext.id,
-          patch: immediatePatch,
-        });
+        if (target.next_match_id && target.next_match_slot) {
+          assignMatchSlot(target.next_match_id, target.next_match_slot, null);
+        }
+        if (target.loser_match_id && target.loser_match_slot) {
+          assignMatchSlot(target.loser_match_id, target.loser_match_slot, null);
+        }
       }
+    }
+  };
+
+  const currentBracketType = match.bracket_type ?? 'winner';
+
+  if (currentBracketType === 'grand_final') {
+    if (match.next_match_id) {
+      const resetMatch = matchById.get(match.next_match_id);
+      if (resetMatch && resetMatch.bracket_type === 'grand_final_reset') {
+        if (resolvedWinnerId === match.participant2_id) {
+          const participantsChanged =
+            resetMatch.participant1_id !== match.participant1_id ||
+            resetMatch.participant2_id !== match.participant2_id;
+          resetMatch.participant1_id = match.participant1_id;
+          resetMatch.participant2_id = match.participant2_id;
+          if (participantsChanged) {
+            resetMatch.winner_id = null;
+            resetMatch.score_1 = null;
+            resetMatch.score_2 = null;
+          }
+        } else {
+          clearResetMatch(resetMatch.id);
+        }
+      }
+    }
+  } else if (currentBracketType !== 'grand_final_reset') {
+    if (match.next_match_id && match.next_match_slot) {
+      assignMatchSlot(match.next_match_id, match.next_match_slot, resolvedWinnerId);
+    }
+    if (match.loser_match_id && match.loser_match_slot) {
+      assignMatchSlot(match.loser_match_id, match.loser_match_slot, resolvedLoserId);
     }
   }
 
-  // Check if final match has a winner after applying all patches
-  const simulatedMatches = Array.from(matchById.values());
-  const maxRound = simulatedMatches.reduce((max, m) => Math.max(max, m.round), match.round);
-  const finalMatch =
-    simulatedMatches.find((m) => m.round === maxRound && m.next_match_id === null) ??
-    simulatedMatches.find((m) => m.round === maxRound);
+  // Build deduplicated downstreamPatches by diffing modified matches against original snapshot
+  const downstreamPatches: DownstreamMatchPatch[] = [];
+  for (const [mId, simulated] of matchById.entries()) {
+    if (mId === match.id) continue;
+    const orig = originalById.get(mId);
+    if (!orig) continue;
 
-  const finalHasWinner = Boolean(finalMatch?.winner_id);
+    const patch: DownstreamMatchPatch['patch'] = {};
+    let changed = false;
+
+    if (simulated.participant1_id !== orig.participant1_id) {
+      patch.participant1_id = simulated.participant1_id;
+      changed = true;
+    }
+    if (simulated.participant2_id !== orig.participant2_id) {
+      patch.participant2_id = simulated.participant2_id;
+      changed = true;
+    }
+    if (simulated.winner_id !== orig.winner_id) {
+      patch.winner_id = simulated.winner_id;
+      changed = true;
+    }
+    if (simulated.score_1 !== orig.score_1) {
+      patch.score_1 = simulated.score_1;
+      changed = true;
+    }
+    if (simulated.score_2 !== orig.score_2) {
+      patch.score_2 = simulated.score_2;
+      changed = true;
+    }
+
+    if (changed) {
+      downstreamPatches.push({ matchId: mId, patch });
+    }
+  }
+
+  // Determine tournament completion state
+  const simulatedMatches = Array.from(matchById.values());
+  const isDoubleElimination = simulatedMatches.some(
+    (m) =>
+      m.bracket_type === 'grand_final' ||
+      m.bracket_type === 'grand_final_reset' ||
+      m.bracket_type === 'loser'
+  );
+
+  let isCompleted = false;
+  if (isDoubleElimination) {
+    const gf = simulatedMatches.find((m) => m.bracket_type === 'grand_final');
+    const gfr = simulatedMatches.find((m) => m.bracket_type === 'grand_final_reset');
+    if (gf?.winner_id) {
+      if (gf.winner_id === gf.participant1_id || !gfr) {
+        isCompleted = true;
+      } else if (gf.winner_id === gf.participant2_id) {
+        isCompleted = Boolean(gfr.winner_id);
+      }
+    }
+  } else {
+    const maxRound = simulatedMatches.reduce((max, m) => Math.max(max, m.round), match.round);
+    const finalMatch =
+      simulatedMatches.find((m) => m.round === maxRound && m.next_match_id === null) ??
+      simulatedMatches.find((m) => m.round === maxRound);
+    isCompleted = Boolean(finalMatch?.winner_id);
+  }
 
   return {
     matchUpdate: {
@@ -506,6 +1147,39 @@ export function computeScorePropagation(
       ...(court !== undefined ? { court } : {}),
     },
     downstreamPatches,
-    nextTournamentStatus: finalHasWinner ? 'completed' : 'in_progress',
+    nextTournamentStatus: isCompleted ? 'completed' : 'in_progress',
   };
+}
+
+export interface TournamentFormatDraft {
+  format: TournamentFormat;
+  hasGrandFinalReset: boolean;
+}
+
+let pendingTournamentFormatDraft: TournamentFormatDraft | null = null;
+
+/**
+ * Store a temporary tournament format selection when handing off from a session shuffle modal
+ * to the Customize & Seed tournament dialog.
+ */
+export function setPendingTournamentFormatDraft(
+  draft: TournamentFormatDraft | null
+): void {
+  pendingTournamentFormatDraft = draft;
+}
+
+/**
+ * Read the pending tournament format draft without clearing it (StrictMode-safe).
+ */
+export function getPendingTournamentFormatDraft(): TournamentFormatDraft | null {
+  return pendingTournamentFormatDraft;
+}
+
+/**
+ * Consume and clear the pending tournament format draft once initialized.
+ */
+export function consumePendingTournamentFormatDraft(): TournamentFormatDraft | null {
+  const draft = pendingTournamentFormatDraft;
+  pendingTournamentFormatDraft = null;
+  return draft;
 }

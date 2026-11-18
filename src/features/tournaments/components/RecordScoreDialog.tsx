@@ -150,12 +150,21 @@ export function RecordScoreDialog({
   const pair1Name = formatPairName(participant1);
   const pair2Name = formatPairName(participant2);
 
+  const matchHeading =
+    match.bracket_type === 'grand_final'
+      ? 'Grand Final'
+      : match.bracket_type === 'grand_final_reset'
+        ? 'Grand Final Reset'
+        : match.bracket_type === 'loser'
+          ? `Losers R${match.round} · Match ${match.match_order}`
+          : `Match ${match.match_order}`;
+
   return (
     <>
       <Dialog
         open={open}
         onClose={onClose}
-        title={`Match ${match.match_order} — Winner & Score`}
+        title={`${matchHeading} — Winner & Score`}
         description="Pick the winning pair immediately, or edit scores before/after the match. Switching the winner automatically fixes downstream rounds."
       >
         <form onSubmit={handleSave} className="space-y-4">
