@@ -1150,3 +1150,36 @@ export function computeScorePropagation(
     nextTournamentStatus: isCompleted ? 'completed' : 'in_progress',
   };
 }
+
+export interface TournamentFormatDraft {
+  format: TournamentFormat;
+  hasGrandFinalReset: boolean;
+}
+
+let pendingTournamentFormatDraft: TournamentFormatDraft | null = null;
+
+/**
+ * Store a temporary tournament format selection when handing off from a session shuffle modal
+ * to the Customize & Seed tournament dialog.
+ */
+export function setPendingTournamentFormatDraft(
+  draft: TournamentFormatDraft | null
+): void {
+  pendingTournamentFormatDraft = draft;
+}
+
+/**
+ * Read the pending tournament format draft without clearing it (StrictMode-safe).
+ */
+export function getPendingTournamentFormatDraft(): TournamentFormatDraft | null {
+  return pendingTournamentFormatDraft;
+}
+
+/**
+ * Consume and clear the pending tournament format draft once initialized.
+ */
+export function consumePendingTournamentFormatDraft(): TournamentFormatDraft | null {
+  const draft = pendingTournamentFormatDraft;
+  pendingTournamentFormatDraft = null;
+  return draft;
+}

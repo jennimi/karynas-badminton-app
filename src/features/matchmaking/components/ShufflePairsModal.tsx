@@ -5,7 +5,9 @@ import {
   Copy,
   Plus,
   RefreshCw,
+  RotateCcw,
   SlidersHorizontal,
+  Swords,
   Trophy,
   UserPlus,
   X,
@@ -23,7 +25,8 @@ import { Input } from '../../../shared/ui/input';
 import { Tabs } from '../../../shared/ui/tabs';
 import { formatDate } from '../../../shared/utils/format';
 import { createTournament } from '../../tournaments/api';
-import type { DraftDoublesPair } from '../../tournaments/types';
+import { setPendingTournamentFormatDraft } from '../../tournaments/bracket';
+import type { DraftDoublesPair, TournamentFormat } from '../../tournaments/types';
 import {
   ODD_GUEST_KEY,
   buildSessionShufflePool,
@@ -78,6 +81,9 @@ export function ShufflePairsModal({
   const [selectedLoc, setSelectedLoc] = useState<ShuffleLocation | null>(null);
   const [dragFromLoc, setDragFromLoc] = useState<ShuffleLocation | null>(null);
   const [copiedRecently, setCopiedRecently] = useState(false);
+  const [tournamentFormat, setTournamentFormat] =
+    useState<TournamentFormat>('single_elimination');
+  const [hasGrandFinalReset, setHasGrandFinalReset] = useState(true);
 
   const [shuffleState, setShuffleState] = useState<ShuffleResult>(() =>
     generateShuffledPairs(buildSessionShufflePool(session.participants), 'bench')
@@ -143,6 +149,8 @@ export function ShufflePairsModal({
         sessionId: session.id,
         name: defaultTournamentName,
         pairs: toDraftDoublesPairs(shuffleState.pairs),
+        format: tournamentFormat,
+        hasGrandFinalReset,
       }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['tournaments', session.group_id] });
@@ -304,6 +312,10 @@ export function ShufflePairsModal({
       return;
     }
     const draft = toDraftDoublesPairs(shuffleState.pairs);
+    setPendingTournamentFormatDraft({
+      format: tournamentFormat,
+      hasGrandFinalReset,
+    });
     onClose();
     onCustomizeTournament(draft);
   }
@@ -603,10 +615,56 @@ export function ShufflePairsModal({
           </div>
         )}
 
-        {shuffleState.pairs.length < 2 && (
+        {shuffleState.pairs.length < 2 ? (
           <p className="rounded-xl bg-butter-soft/60 px-3 py-2 text-xs font-bold text-butter-strong">
             Form at least 2 doubles pairs to turn this session into a knockout tournament (quick-add a guest or select Double-Up if needed).
           </p>
+        ) : (
+          <div className="space-y-2.5 rounded-2xl border border-border bg-muted/35 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-foreground">
+                <Swords className="size-3.5 text-brand-strong" />
+                Tournament Format
+              </span>
+              <Badge variant={tournamentFormat === 'double_elimination' ? 'brand' : 'neutral'}>
+                {tournamentFormat === 'double_elimination'
+                  ? `${shuffleState.pairs.length * 2 - 2}${hasGrandFinalReset ? `–${shuffleState.pairs.length * 2 - 1}` : ''} matches`
+                  : `${shuffleState.pairs.length - 1} matches`}
+              </Badge>
+            </div>
+
+            <div className="overflow-x-auto pb-0.5">
+              <Tabs<TournamentFormat>
+                label="Session tournament format"
+                value={tournamentFormat}
+                onChange={setTournamentFormat}
+                options={[
+                  { value: 'single_elimination', label: 'Single Elimination' },
+                  { value: 'double_elimination', label: 'Double Elimination' },
+                ]}
+              />
+            </div>
+
+            {tournamentFormat === 'double_elimination' && (
+              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <RotateCcw className="size-3.5 shrink-0 text-butter-strong" />
+                  <span className="text-xs font-bold text-foreground">
+                    Grand Finals Reset
+                    <span className="ml-1 font-semibold text-muted-foreground">
+                      (Losers Champ must win twice)
+                    </span>
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={hasGrandFinalReset}
+                  onChange={(e) => setHasGrandFinalReset(e.target.checked)}
+                  className="size-4 shrink-0 cursor-pointer accent-brand"
+                />
+              </label>
+            )}
+          </div>
         )}
 
         {/* Footer Actions */}

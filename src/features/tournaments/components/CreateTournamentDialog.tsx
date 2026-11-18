@@ -11,7 +11,7 @@ import {
   Trophy,
   Users,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { cn } from '../../../shared/lib/cn';
@@ -29,10 +29,12 @@ import { useMe } from '../../members/useMe';
 import { createTournament } from '../api';
 import {
   getMultiTeamPlayerCounts,
+  getPendingTournamentFormatDraft,
   getPlayerIdentityKey,
   nextPowerOfTwo,
   parseDoublesPairLines,
   resolvePlayerIdentity,
+  setPendingTournamentFormatDraft,
 } from '../bracket';
 import type { DraftDoublesPair, TournamentFormat } from '../types';
 
@@ -43,6 +45,8 @@ interface CreateTournamentDialogProps {
   sessionId?: string | null;
   initialName?: string;
   initialPairs?: DraftDoublesPair[];
+  initialFormat?: TournamentFormat;
+  initialHasGrandFinalReset?: boolean;
 }
 
 type EntryMode = 'list' | 'rows';
@@ -54,14 +58,25 @@ export function CreateTournamentDialog({
   sessionId,
   initialName,
   initialPairs,
+  initialFormat,
+  initialHasGrandFinalReset,
 }: CreateTournamentDialogProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { memberId: myMemberId } = useMe(groupId);
 
+  const [pendingFormatDraft] = useState(() => getPendingTournamentFormatDraft());
   const [name, setName] = useState(initialName ?? '');
-  const [format, setFormat] = useState<TournamentFormat>('single_elimination');
-  const [hasGrandFinalReset, setHasGrandFinalReset] = useState(true);
+  const [format, setFormat] = useState<TournamentFormat>(
+    initialFormat ?? pendingFormatDraft?.format ?? 'single_elimination'
+  );
+  const [hasGrandFinalReset, setHasGrandFinalReset] = useState(
+    initialHasGrandFinalReset ?? pendingFormatDraft?.hasGrandFinalReset ?? true
+  );
+
+  useEffect(() => {
+    setPendingTournamentFormatDraft(null);
+  }, []);
   const [mode, setMode] = useState<EntryMode>(
     initialPairs && initialPairs.length > 0 ? 'rows' : 'list'
   );
