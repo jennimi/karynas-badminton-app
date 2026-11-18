@@ -1,9 +1,13 @@
-import { AlertTriangle, Check, Pencil, Trophy } from 'lucide-react';
+import { AlertTriangle, ArrowDownRight, Check, Pencil, ShieldAlert, Trophy } from 'lucide-react';
 import { useMemo } from 'react';
 import { cn } from '../../../shared/lib/cn';
 import { Avatar } from '../../../shared/ui/avatar';
 import { Badge } from '../../../shared/ui/badge';
-import { detectMatchPlayerConflicts, formatPairName } from '../bracket';
+import {
+  detectMatchPlayerConflicts,
+  formatPairName,
+  isRound1ByeMatch,
+} from '../bracket';
 import type {
   MatchPlayerConflict,
   TournamentMatch,
@@ -16,6 +20,10 @@ interface BracketMatchCardProps {
   participant2: TournamentParticipantWithMember | null;
   myMemberId: string | null;
   isFinal?: boolean;
+  stageLabel?: string;
+  isEliminationMatch?: boolean;
+  loserDestinationLabel?: string | null;
+  isResetInactive?: boolean;
   onSelect: (match: TournamentMatch, preselectedWinnerId?: string | null) => void;
   onResolveConflict?: (
     match: TournamentMatch,
@@ -29,16 +37,14 @@ export function BracketMatchCard({
   participant2,
   myMemberId,
   isFinal = false,
+  stageLabel,
+  isEliminationMatch = false,
+  loserDestinationLabel = null,
+  isResetInactive = false,
   onSelect,
   onResolveConflict,
 }: BracketMatchCardProps) {
-  const isRound1Bye =
-    match.round === 1 &&
-    ((participant1 !== null && participant2 === null) ||
-      (participant1 === null && participant2 !== null)) &&
-    match.winner_id !== null &&
-    match.score_1 === null &&
-    match.score_2 === null;
+  const isRound1Bye = isRound1ByeMatch(match);
 
   const isCompleted = match.winner_id !== null && !isRound1Bye;
   const hasBothPairs = participant1 !== null && participant2 !== null;
@@ -61,19 +67,44 @@ export function BracketMatchCard({
     [participant1, participant2]
   );
 
+  const defaultTitle =
+    match.bracket_type === 'grand_final'
+      ? 'Grand Final'
+      : match.bracket_type === 'grand_final_reset'
+        ? 'Grand Final Reset'
+        : isFinal
+          ? 'Final'
+          : `Match ${match.match_order}`;
+
   return (
     <div
       className={cn(
         'w-72 shrink-0 rounded-card border bg-card p-3 text-card-foreground shadow-soft transition-all',
-        involvesMe ? 'border-brand ring-2 ring-brand' : 'border-border'
+        involvesMe ? 'border-brand ring-2 ring-brand' : 'border-border',
+        isResetInactive && 'opacity-70'
       )}
     >
       {/* Top metadata bar */}
-      <div className="mb-2 flex items-center justify-between gap-2 text-xs">
-        <div className="flex items-center gap-1.5">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className="font-extrabold text-muted-foreground">
-            {isFinal ? 'Final' : `Match ${match.match_order}`}
+            {stageLabel ?? defaultTitle}
           </span>
+          {isEliminationMatch && !isRound1Bye && (
+            <Badge variant="coral" className="px-1.5 py-0 text-[10px]">
+              Elimination
+            </Badge>
+          )}
+          {match.bracket_type === 'grand_final' && (
+            <Badge variant="lime" className="px-1.5 py-0 text-[10px]">
+              Grand Final
+            </Badge>
+          )}
+          {match.bracket_type === 'grand_final_reset' && (
+            <Badge variant="butter" className="px-1.5 py-0 text-[10px]">
+              Bracket Reset
+            </Badge>
+          )}
           {match.court !== null && (
             <Badge variant="butter">Court {match.court}</Badge>
           )}
@@ -83,6 +114,8 @@ export function BracketMatchCard({
           {involvesMe && <Badge variant="brand">Your Team</Badge>}
           {isRound1Bye ? (
             <Badge variant="neutral">BYE</Badge>
+          ) : isResetInactive ? (
+            <Badge variant="neutral">If Needed</Badge>
           ) : isCompleted ? (
             <Badge variant="lime">Winner Picked</Badge>
           ) : hasBothPairs ? (
@@ -157,21 +190,41 @@ export function BracketMatchCard({
         </div>
       )}
 
-      {hasBothPairs && (
-        <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-1.5 text-[11px] font-bold">
-          <button
-            type="button"
-            onClick={() => onSelect(match)}
-            className="inline-flex cursor-pointer items-center gap-1 text-muted-foreground hover:text-foreground"
-          >
-            <Pencil className="size-3" />
-            <span>
-              {match.score_1 !== null || match.score_2 !== null
-                ? 'Edit score or winner'
-                : 'Add optional score / edit'}
-            </span>
-          </button>
-          {isFinal && <Trophy className="size-3.5 text-butter-strong" />}
+      {(loserDestinationLabel || hasBothPairs) && !isRound1Bye && (
+        <div className="mt-2 space-y-1 border-t border-border/60 pt-1.5 text-[11px] font-bold">
+          {loserDestinationLabel && (
+            <div
+              className={cn(
+                'flex items-center gap-1',
+                isEliminationMatch ? 'text-coral-strong' : 'text-muted-foreground'
+              )}
+            >
+              {isEliminationMatch ? (
+                <ShieldAlert className="size-3 shrink-0" />
+              ) : (
+                <ArrowDownRight className="size-3 shrink-0" />
+              )}
+              <span className="truncate">{loserDestinationLabel}</span>
+            </div>
+          )}
+
+          {hasBothPairs && (
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => onSelect(match)}
+                className="inline-flex cursor-pointer items-center gap-1 text-muted-foreground hover:text-foreground"
+              >
+                <Pencil className="size-3" />
+                <span>
+                  {match.score_1 !== null || match.score_2 !== null
+                    ? 'Edit score or winner'
+                    : 'Add optional score / edit'}
+                </span>
+              </button>
+              {isFinal && <Trophy className="size-3.5 text-butter-strong" />}
+            </div>
+          )}
         </div>
       )}
     </div>

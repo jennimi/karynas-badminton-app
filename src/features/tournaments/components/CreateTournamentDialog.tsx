@@ -3,8 +3,10 @@ import {
   ArrowDown,
   ArrowUp,
   Plus,
+  RotateCcw,
   Shuffle,
   Sparkles,
+  Swords,
   Trash2,
   Trophy,
   Users,
@@ -12,6 +14,7 @@ import {
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { cn } from '../../../shared/lib/cn';
 import { Avatar } from '../../../shared/ui/avatar';
 import { Badge } from '../../../shared/ui/badge';
 import { Button } from '../../../shared/ui/button';
@@ -31,7 +34,7 @@ import {
   parseDoublesPairLines,
   resolvePlayerIdentity,
 } from '../bracket';
-import type { DraftDoublesPair } from '../types';
+import type { DraftDoublesPair, TournamentFormat } from '../types';
 
 interface CreateTournamentDialogProps {
   open: boolean;
@@ -57,6 +60,8 @@ export function CreateTournamentDialog({
   const { memberId: myMemberId } = useMe(groupId);
 
   const [name, setName] = useState(initialName ?? '');
+  const [format, setFormat] = useState<TournamentFormat>('single_elimination');
+  const [hasGrandFinalReset, setHasGrandFinalReset] = useState(true);
   const [mode, setMode] = useState<EntryMode>(
     initialPairs && initialPairs.length > 0 ? 'rows' : 'list'
   );
@@ -236,6 +241,8 @@ export function CreateTournamentDialog({
         sessionId,
         name,
         pairs: activePairs,
+        format,
+        hasGrandFinalReset,
       }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['tournaments', groupId] });
@@ -264,12 +271,20 @@ export function CreateTournamentDialog({
     createMutation.mutate();
   }
 
+  const estimatedMatches =
+    activePairs.length >= 2
+      ? format === 'double_elimination'
+        ? activePairs.length * 2 - 2
+        : activePairs.length - 1
+      : 0;
+
   return (
     <Dialog
       open={open}
       onClose={onClose}
+      wide
       title="New Doubles Tournament"
-      description="Enter doubles pairs from a list. Existing group members link automatically, and new names join as Guests."
+      description="Choose a knockout format and enter doubles pairs. Existing group members link automatically, and new names join as Guests."
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <Field label="Tournament name" htmlFor="tournament-name">
@@ -281,6 +296,90 @@ export function CreateTournamentDialog({
             autoFocus
           />
         </Field>
+
+        {/* Tournament Format Selector */}
+        <div className="space-y-2">
+          <span className="block text-sm font-bold text-foreground">
+            Tournament format
+          </span>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {(
+              [
+                {
+                  value: 'single_elimination' as const,
+                  title: 'Single Elimination',
+                  subtitle: 'Classic knockout — 1 loss eliminates a pair',
+                  icon: Trophy,
+                },
+                {
+                  value: 'double_elimination' as const,
+                  title: 'Double Elimination',
+                  subtitle: 'Upper & Lower brackets — 2 losses to eliminate',
+                  icon: Swords,
+                },
+              ] as const
+            ).map((opt) => {
+              const Icon = opt.icon;
+              const selected = format === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setFormat(opt.value)}
+                  className={cn(
+                    'flex cursor-pointer items-start gap-3 rounded-2xl border p-3 text-left transition-all',
+                    selected
+                      ? 'border-brand bg-brand-soft/45 ring-2 ring-brand shadow-soft'
+                      : 'border-border bg-card hover:bg-muted/50'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl',
+                      selected
+                        ? 'bg-brand text-ink'
+                        : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    <Icon className="size-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-extrabold text-foreground">
+                      {opt.title}
+                    </p>
+                    <p className="mt-0.5 text-xs font-semibold text-muted-foreground">
+                      {opt.subtitle}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {format === 'double_elimination' && (
+            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-border bg-muted/40 p-3">
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-xl bg-butter-soft text-butter-strong">
+                  <RotateCcw className="size-3.5" />
+                </span>
+                <div>
+                  <p className="text-xs font-extrabold text-foreground">
+                    Grand Finals Reset
+                  </p>
+                  <p className="text-[11px] font-semibold text-muted-foreground">
+                    If the Losers Bracket winner wins Grand Final Game 1, a decisive Game 2 is played.
+                  </p>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={hasGrandFinalReset}
+                onChange={(e) => setHasGrandFinalReset(e.target.checked)}
+                className="size-4 shrink-0 cursor-pointer accent-brand"
+              />
+            </label>
+          )}
+        </div>
 
         <div className="flex items-center justify-between gap-2">
           <Tabs<EntryMode>
@@ -403,7 +502,8 @@ export function CreateTournamentDialog({
             </span>
             {activePairs.length >= 2 && (
               <span className="text-brand-strong">
-                {bracketSize}-team bracket
+                {format === 'double_elimination' ? 'Double Elim' : 'Single Elim'} ·{' '}
+                {bracketSize}-slot bracket
                 {byeCount > 0 ? ` · ${byeCount} R1 BYE${byeCount === 1 ? '' : 's'}` : ''}
               </span>
             )}
@@ -413,9 +513,12 @@ export function CreateTournamentDialog({
             <div className="flex flex-wrap items-center gap-2 rounded-xl bg-butter-soft px-3 py-1.5 text-xs font-bold text-butter-strong">
               <Sparkles className="size-3.5 shrink-0" />
               <span>
-                {activePairs.length} pairs → {bracketSize}-slot bracket
+                {activePairs.length} pairs →{' '}
+                {format === 'double_elimination'
+                  ? `${estimatedMatches}${hasGrandFinalReset ? `–${estimatedMatches + 1}` : ''} matches (Upper, Lower & Grand Final)`
+                  : `${estimatedMatches} matches`}
                 {byeCount > 0
-                  ? ` · Top ${byeCount} seeded pair${byeCount === 1 ? '' : 's'} advance to Round 2 by BYE`
+                  ? ` · Top ${byeCount} seeded pair${byeCount === 1 ? '' : 's'} advance by BYE`
                   : ' · Full bracket (no BYEs)'}
               </span>
             </div>

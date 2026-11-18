@@ -2,12 +2,22 @@ import type { Member } from '../../shared/types';
 
 export type TournamentStatus = 'draft' | 'in_progress' | 'completed';
 
+export type TournamentFormat = 'single_elimination' | 'double_elimination';
+
+export type BracketType =
+  | 'winner'
+  | 'loser'
+  | 'grand_final'
+  | 'grand_final_reset';
+
 export interface Tournament {
   id: string;
   group_id: string;
   session_id?: string | null;
   name: string;
   status: TournamentStatus;
+  format: TournamentFormat;
+  has_grand_final_reset: boolean;
   created_at: string;
 }
 
@@ -34,6 +44,7 @@ export interface TournamentParticipantWithMember extends TournamentParticipant {
 export interface TournamentMatch {
   id: string;
   tournament_id: string;
+  bracket_type: BracketType;
   round: number;
   match_order: number;
   court: number | null;
@@ -44,6 +55,8 @@ export interface TournamentMatch {
   winner_id: string | null;
   next_match_id: string | null;
   next_match_slot: 1 | 2 | null;
+  loser_match_id: string | null;
+  loser_match_slot: 1 | 2 | null;
   created_at: string;
 }
 
@@ -59,6 +72,13 @@ export interface TournamentDetail extends Tournament {
   matches: TournamentMatch[];
 }
 
+export interface TournamentStandings {
+  first: TournamentParticipantWithMember | null;
+  second: TournamentParticipantWithMember | null;
+  third: TournamentParticipantWithMember | null;
+  fourth: TournamentParticipantWithMember | null;
+}
+
 export interface DraftDoublesPair {
   key: string;
   player1Name: string;
@@ -72,6 +92,8 @@ export interface CreateTournamentInput {
   sessionId?: string | null;
   name: string;
   pairs: DraftDoublesPair[];
+  format?: TournamentFormat;
+  hasGrandFinalReset?: boolean;
 }
 
 export interface UpdateTournamentParticipantInput {

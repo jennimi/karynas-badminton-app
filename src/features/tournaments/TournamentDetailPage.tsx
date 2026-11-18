@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Calendar,
   Crown,
+  Medal,
   Pencil,
   Swords,
   Trash2,
@@ -22,27 +23,93 @@ import { Avatar } from '../../shared/ui/avatar';
 import { Badge } from '../../shared/ui/badge';
 import { Button } from '../../shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../shared/ui/card';
+import { Tabs } from '../../shared/ui/tabs';
 import { formatDate } from '../../shared/utils/format';
 import { useSyncCurrentGroup } from '../groups/hooks';
 import { useMe } from '../members/useMe';
 import { useAdmin } from '../payments/useAdmin';
 import { deleteTournament, getTournament } from './api';
 import {
+  computeTournamentStandings,
   formatPairName,
+  getBracketRoundLabel,
+  getLoserDestinationLabel,
   getMultiTeamPlayerCounts,
+  getPlayableMatches,
   getPlayerIdentityKey,
-  getRoundLabel,
+  isResetMatchActive,
   nextPowerOfTwo,
 } from './bracket';
 import { BracketMatchCard } from './components/BracketMatchCard';
 import { EditTournamentPairDialog } from './components/EditTournamentPairDialog';
 import { RecordScoreDialog } from './components/RecordScoreDialog';
 import type {
+  BracketType,
   MatchPlayerConflict,
   TournamentMatch,
   TournamentParticipantWithMember,
   TournamentStatus,
 } from './types';
+
+type BracketViewTab = 'all' | 'winner' | 'loser' | 'grand_final';
+
+interface RoundColumn {
+  key: string;
+  round: number;
+  bracketType: BracketType;
+  label: string;
+  matches: TournamentMatch[];
+}
+
+function groupRoundsByBracket(
+  matches: TournamentMatch[],
+  bracketTypes: BracketType[],
+  format: 'single_elimination' | 'double_elimination'
+): RoundColumn[] {
+  const filtered = matches.filter((m) => bracketTypes.includes(m.bracket_type));
+  if (filtered.length === 0) return [];
+
+  const grouped = new Map<string, { bracketType: BracketType; round: number; matches: TournamentMatch[] }>();
+  for (const m of filtered) {
+    const key = `${m.bracket_type}:${m.round}`;
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.matches.push(m);
+    } else {
+      grouped.set(key, { bracketType: m.bracket_type, round: m.round, matches: [m] });
+    }
+  }
+
+  const orderedEntries = Array.from(grouped.entries()).sort(([, a], [, b]) => {
+    const typeWeight = (t: BracketType) =>
+      t === 'winner' ? 1 : t === 'loser' ? 2 : t === 'grand_final' ? 3 : 4;
+    if (typeWeight(a.bracketType) !== typeWeight(b.bracketType)) {
+      return typeWeight(a.bracketType) - typeWeight(b.bracketType);
+    }
+    return a.round - b.round;
+  });
+
+  const totalRoundsForType = new Map<BracketType, number>();
+  for (const [, entry] of orderedEntries) {
+    totalRoundsForType.set(
+      entry.bracketType,
+      Math.max(totalRoundsForType.get(entry.bracketType) ?? 0, entry.round)
+    );
+  }
+
+  return orderedEntries.map(([key, entry]) => ({
+    key,
+    round: entry.round,
+    bracketType: entry.bracketType,
+    label: getBracketRoundLabel(
+      entry.bracketType,
+      entry.round,
+      totalRoundsForType.get(entry.bracketType) ?? entry.round,
+      format
+    ),
+    matches: entry.matches.sort((a, b) => a.match_order - b.match_order),
+  }));
+}
 
 const statusBadgeMap: Record<
   TournamentStatus,
@@ -82,6 +149,7 @@ export default function TournamentDetailPage() {
     conflict?: MatchPlayerConflict | null;
   } | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bracketTab, setBracketTab] = useState<BracketViewTab>('all');
 
   const participantById = useMemo(() => {
     const map = new Map<string, TournamentParticipantWithMember>();
@@ -104,45 +172,81 @@ export default function TournamentDetailPage() {
     [tournament?.participants]
   );
 
-  const rounds = useMemo(() => {
+  const isDoubleElimination = tournament?.format === 'double_elimination';
+
+  const winnerRounds = useMemo(() => {
     if (!tournament) return [];
-    const grouped = new Map<number, TournamentMatch[]>();
-    for (const m of tournament.matches) {
-      const list = grouped.get(m.round) ?? [];
-      list.push(m);
-      grouped.set(m.round, list);
-    }
-    const sortedRoundNums = Array.from(grouped.keys()).sort((a, b) => a - b);
-    return sortedRoundNums.map((roundNum) => ({
-      round: roundNum,
-      label: getRoundLabel(roundNum, sortedRoundNums.length),
-      matches: (grouped.get(roundNum) ?? []).sort(
-        (a, b) => a.match_order - b.match_order
-      ),
-    }));
+    return groupRoundsByBracket(tournament.matches, ['winner'], tournament.format);
   }, [tournament]);
 
-  const championPair = useMemo(() => {
-    if (!tournament || rounds.length === 0) return null;
-    const finalRound = rounds[rounds.length - 1];
-    const finalMatch = finalRound.matches[0];
-    if (!finalMatch?.winner_id) return null;
-    return participantById.get(finalMatch.winner_id) ?? null;
-  }, [tournament, rounds, participantById]);
+  const loserRounds = useMemo(() => {
+    if (!tournament || !isDoubleElimination) return [];
+    return groupRoundsByBracket(tournament.matches, ['loser'], tournament.format);
+  }, [tournament, isDoubleElimination]);
+
+  const grandFinalRounds = useMemo(() => {
+    if (!tournament || !isDoubleElimination) return [];
+    return groupRoundsByBracket(
+      tournament.matches,
+      ['grand_final', 'grand_final_reset'],
+      tournament.format
+    );
+  }, [tournament, isDoubleElimination]);
+
+  const standings = useMemo(() => {
+    if (!tournament) {
+      return { first: null, second: null, third: null, fourth: null };
+    }
+    return computeTournamentStandings(
+      tournament.matches,
+      tournament.participants,
+      tournament.format
+    );
+  }, [tournament]);
+
+  const championPair = standings.first;
 
   const playableMatchesStats = useMemo(() => {
-    if (!tournament) return { completed: 0, total: 0 };
-    const playable = tournament.matches.filter(
-      (m) =>
-        !(
-          m.round === 1 &&
-          ((m.participant1_id && !m.participant2_id) ||
-            (!m.participant1_id && m.participant2_id))
-        )
-    );
+    if (!tournament) {
+      return {
+        completed: 0,
+        total: 0,
+        winnerTotal: 0,
+        loserTotal: 0,
+        grandFinalTotal: 0,
+      };
+    }
+    const playable = getPlayableMatches(tournament.matches);
     const completed = playable.filter((m) => m.winner_id !== null).length;
-    return { completed, total: playable.length };
+    return {
+      completed,
+      total: playable.length,
+      winnerTotal: playable.filter((m) => m.bracket_type === 'winner').length,
+      loserTotal: playable.filter((m) => m.bracket_type === 'loser').length,
+      grandFinalTotal: playable.filter(
+        (m) =>
+          m.bracket_type === 'grand_final' ||
+          m.bracket_type === 'grand_final_reset'
+      ).length,
+    };
   }, [tournament]);
+
+  const currentStageLabel = useMemo(() => {
+    if (!tournament) return 'In Progress';
+    const allColumns = [...winnerRounds, ...loserRounds, ...grandFinalRounds];
+    for (const col of allColumns) {
+      const hasOpenMatch = col.matches.some((m) => {
+        if (m.bracket_type === 'grand_final_reset') {
+          return (
+            isResetMatchActive(m, tournament.matches) && m.winner_id === null
+          );
+        }
+        return m.winner_id === null;
+      });
+      if (hasOpenMatch) return col.label;
+    }
+    return 'In Progress';
+  }, [tournament, winnerRounds, loserRounds, grandFinalRounds]);
 
   const selectedMatch = useMemo(() => {
     if (!selectedMatchState || !tournament) return null;
@@ -218,6 +322,117 @@ export default function TournamentDetailPage() {
   const statusMeta = statusBadgeMap[tournament.status] ?? statusBadgeMap.draft;
   const bracketSize = nextPowerOfTwo(Math.max(2, tournament.participants.length));
   const dateOnly = tournament.created_at.slice(0, 10);
+  const hasResetMatch = tournament.matches.some(
+    (m) => m.bracket_type === 'grand_final_reset'
+  );
+  const showStandingsCard =
+    isDoubleElimination &&
+    (standings.first !== null ||
+      standings.third !== null ||
+      standings.fourth !== null);
+
+  function renderBracketColumns(
+    columns: RoundColumn[],
+    accentVariant: 'brand' | 'coral' | 'lime'
+  ) {
+    return (
+      <div className="overflow-x-auto pb-3">
+        <div className="flex min-w-max items-stretch gap-6">
+          {columns.map((roundCol, colIdx) => {
+            const isSectionFinalCol = colIdx === columns.length - 1;
+            const totalInBracket = columns.length;
+            return (
+              <div
+                key={roundCol.key}
+                className="flex w-72 shrink-0 flex-col"
+              >
+                <div className="mb-3 flex items-center justify-between rounded-xl bg-muted px-3 py-2">
+                  <span className="text-xs font-extrabold uppercase tracking-wide text-foreground">
+                    {roundCol.label}
+                  </span>
+                  <Badge variant={isSectionFinalCol ? accentVariant : 'neutral'}>
+                    {roundCol.matches.length}{' '}
+                    {roundCol.matches.length === 1 ? 'match' : 'matches'}
+                  </Badge>
+                </div>
+
+                <div className="flex flex-1 flex-col justify-around gap-4 py-2">
+                  {roundCol.matches.map((match) => {
+                    const isResetInactive =
+                      match.bracket_type === 'grand_final_reset' &&
+                      !isResetMatchActive(match, tournament!.matches);
+                    const isEliminationMatch =
+                      isDoubleElimination &&
+                      (match.bracket_type === 'loser' ||
+                        match.bracket_type === 'grand_final_reset' ||
+                        (match.bracket_type === 'grand_final' && !hasResetMatch));
+
+                    let stageLabel: string | undefined;
+                    if (isDoubleElimination) {
+                      if (match.bracket_type === 'grand_final') {
+                        stageLabel = hasResetMatch ? 'Game 1' : 'Championship';
+                      } else if (match.bracket_type === 'grand_final_reset') {
+                        stageLabel = 'Game 2 (Reset)';
+                      } else if (match.bracket_type === 'winner') {
+                        stageLabel =
+                          roundCol.round === totalInBracket
+                            ? 'Winners Final'
+                            : `Upper R${roundCol.round} · M${match.match_order}`;
+                      } else {
+                        stageLabel =
+                          roundCol.round === totalInBracket
+                            ? 'Losers Final'
+                            : `Lower R${roundCol.round} · M${match.match_order}`;
+                      }
+                    }
+
+                    return (
+                      <BracketMatchCard
+                        key={match.id}
+                        match={match}
+                        participant1={
+                          match.participant1_id
+                            ? (participantById.get(match.participant1_id) ?? null)
+                            : null
+                        }
+                        participant2={
+                          match.participant2_id
+                            ? (participantById.get(match.participant2_id) ?? null)
+                            : null
+                        }
+                        myMemberId={myMemberId}
+                        isFinal={
+                          isDoubleElimination
+                            ? match.bracket_type === 'grand_final' ||
+                              match.bracket_type === 'grand_final_reset'
+                            : isSectionFinalCol
+                        }
+                        stageLabel={stageLabel}
+                        isEliminationMatch={isEliminationMatch}
+                        loserDestinationLabel={getLoserDestinationLabel(
+                          match,
+                          tournament!.matches,
+                          tournament!.format
+                        )}
+                        isResetInactive={isResetInactive}
+                        onSelect={(m, preselectedWinnerId) =>
+                          setSelectedMatchState({
+                            matchId: m.id,
+                            preselectedWinnerId,
+                          })
+                        }
+                        onResolveConflict={handleResolveConflict}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -247,9 +462,12 @@ export default function TournamentDetailPage() {
             <span className="flex flex-wrap items-center gap-3">
               <span>{tournament.name}</span>
               <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
+              <Badge variant={isDoubleElimination ? 'brand' : 'neutral'}>
+                {isDoubleElimination ? 'Double Elimination' : 'Single Elimination'}
+              </Badge>
             </span>
           }
-          description={`Created ${formatDate(dateOnly, 'long')} · ${bracketSize}-team Doubles Knockout`}
+          description={`Created ${formatDate(dateOnly, 'long')} · ${bracketSize}-team Doubles ${isDoubleElimination ? 'Double Elimination' : 'Knockout'}${isDoubleElimination ? (tournament.has_grand_final_reset ? ' · Grand Final Reset Enabled' : ' · Single Grand Final') : ''}`}
           actions={
             <Button
               variant="danger"
@@ -283,8 +501,9 @@ export default function TournamentDetailPage() {
                   {formatPairName(championPair)}
                 </h2>
                 <p className="text-xs font-bold opacity-85">
-                  Undefeated through {rounds.length} knockout round
-                  {rounds.length === 1 ? '' : 's'}!
+                  {isDoubleElimination
+                    ? 'Crowned Double Elimination Grand Champions!'
+                    : `Undefeated through ${winnerRounds.length} knockout round${winnerRounds.length === 1 ? '' : 's'}!`}
                 </p>
               </div>
             </div>
@@ -304,6 +523,106 @@ export default function TournamentDetailPage() {
               />
             </div>
           </div>
+        </Card>
+      )}
+
+      {/* Top 4 Standings / Podium (Double Elimination) */}
+      {showStandingsCard && (
+        <Card>
+          <CardHeader>
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2">
+                <Medal className="size-5 text-brand-strong" />
+                <span>Tournament Standings</span>
+              </CardTitle>
+              <span className="text-xs font-semibold text-muted-foreground">
+                Updates automatically as Losers Finals and Grand Finals finish
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {(
+                [
+                  {
+                    place: '1st Place',
+                    subtitle: 'Champions',
+                    pair: standings.first,
+                    tone: 'bg-lime-soft text-lime-strong border-border',
+                    badgeVariant: 'lime' as const,
+                  },
+                  {
+                    place: '2nd Place',
+                    subtitle: 'Runners-Up',
+                    pair: standings.second,
+                    tone: 'bg-brand-soft/60 text-brand-strong border-border',
+                    badgeVariant: 'brand' as const,
+                  },
+                  ...(tournament.participants.length >= 3
+                    ? [
+                        {
+                          place: '3rd Place',
+                          subtitle: 'Losers Finalist',
+                          pair: standings.third,
+                          tone: 'bg-butter-soft/75 text-butter-strong border-border',
+                          badgeVariant: 'butter' as const,
+                        },
+                      ]
+                    : []),
+                  ...(tournament.participants.length >= 4
+                    ? [
+                        {
+                          place: '4th Place',
+                          subtitle: 'Losers Semifinalist',
+                          pair: standings.fourth,
+                          tone: 'bg-muted/60 text-foreground border-border',
+                          badgeVariant: 'neutral' as const,
+                        },
+                      ]
+                    : []),
+                ] as const
+              ).map((slot) => (
+                <div
+                  key={slot.place}
+                  className={cn('rounded-2xl border p-3.5', slot.tone)}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant={slot.badgeVariant}>{slot.place}</Badge>
+                    <span className="text-[11px] font-bold opacity-80">
+                      {slot.subtitle}
+                    </span>
+                  </div>
+                  {slot.pair ? (
+                    <div className="mt-2.5 flex items-center gap-2">
+                      <div className="flex -space-x-1.5 shrink-0">
+                        <Avatar
+                          name={slot.pair.player1_name}
+                          emoji={slot.pair.member?.emoji}
+                          color={slot.pair.member?.color}
+                          compact
+                          className="size-7 text-[10px]"
+                        />
+                        <Avatar
+                          name={slot.pair.player2_name}
+                          emoji={slot.pair.partner?.emoji}
+                          color={slot.pair.partner?.color}
+                          compact
+                          className="size-7 text-[10px]"
+                        />
+                      </div>
+                      <span className="truncate text-sm font-extrabold">
+                        {formatPairName(slot.pair)}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="mt-2.5 text-xs font-semibold italic opacity-70">
+                      Pending match result
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
         </Card>
       )}
 
@@ -330,12 +649,7 @@ export default function TournamentDetailPage() {
         />
         <StatCard
           label={championPair ? 'Champions' : 'Current Stage'}
-          value={
-            championPair
-              ? formatPairName(championPair)
-              : (rounds.find((r) => r.matches.some((m) => m.winner_id === null))
-                  ?.label ?? 'In Progress')
-          }
+          value={championPair ? formatPairName(championPair) : currentStageLabel}
           hint={formatDate(dateOnly)}
           icon={championPair ? Crown : Calendar}
           tone={championPair ? 'lime' : 'coral'}
@@ -345,67 +659,117 @@ export default function TournamentDetailPage() {
       {/* Interactive Knockout Bracket Tree */}
       <Card>
         <CardHeader>
-          <div className="flex w-full flex-wrap items-center justify-between gap-2">
-            <CardTitle>Doubles Knockout Bracket</CardTitle>
-            <span className="text-xs font-semibold text-muted-foreground">
-              Click any match or &ldquo;Win&rdquo; button to pick the winner and optionally enter scores
-            </span>
+          <div className="flex w-full flex-col gap-3">
+            <div className="flex w-full flex-wrap items-center justify-between gap-2">
+              <CardTitle>
+                {isDoubleElimination
+                  ? 'Double Elimination Brackets'
+                  : 'Doubles Knockout Bracket'}
+              </CardTitle>
+              <span className="text-xs font-semibold text-muted-foreground">
+                Click any match or &ldquo;Win&rdquo; button to pick the winner and optionally enter scores
+              </span>
+            </div>
+
+            {isDoubleElimination && (
+              <div className="overflow-x-auto pb-1">
+                <Tabs<BracketViewTab>
+                  label="Bracket view"
+                  value={bracketTab}
+                  onChange={setBracketTab}
+                  options={[
+                    {
+                      value: 'all',
+                      label: 'Full Bracket',
+                      count: playableMatchesStats.total,
+                    },
+                    {
+                      value: 'winner',
+                      label: 'Winners Bracket',
+                      count: playableMatchesStats.winnerTotal,
+                    },
+                    ...(loserRounds.length > 0
+                      ? [
+                          {
+                            value: 'loser' as const,
+                            label: 'Losers Bracket',
+                            count: playableMatchesStats.loserTotal,
+                          },
+                        ]
+                      : []),
+                    {
+                      value: 'grand_final',
+                      label: 'Grand Finals',
+                      count: playableMatchesStats.grandFinalTotal,
+                    },
+                  ]}
+                />
+              </div>
+            )}
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto pb-3">
-            <div className="flex min-w-max items-stretch gap-6">
-              {rounds.map((roundCol, colIdx) => {
-                const isFinalCol = colIdx === rounds.length - 1;
-                return (
-                  <div
-                    key={roundCol.round}
-                    className="flex w-72 shrink-0 flex-col"
-                  >
-                    <div className="mb-3 flex items-center justify-between rounded-xl bg-muted px-3 py-2">
-                      <span className="text-xs font-extrabold uppercase tracking-wide text-foreground">
-                        {roundCol.label}
+        <CardContent className="space-y-8">
+          {!isDoubleElimination ? (
+            renderBracketColumns(winnerRounds, 'lime')
+          ) : (
+            <>
+              {(bracketTab === 'all' || bracketTab === 'winner') &&
+                winnerRounds.length > 0 && (
+                  <section className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="brand">Upper</Badge>
+                        <h3 className="text-sm font-extrabold uppercase tracking-wide text-foreground">
+                          Winners Bracket
+                        </h3>
+                      </div>
+                      <span className="text-xs font-semibold text-muted-foreground">
+                        Undefeated pairs — losing drops to the Losers Bracket
                       </span>
-                      <Badge variant={isFinalCol ? 'lime' : 'neutral'}>
-                        {roundCol.matches.length}{' '}
-                        {roundCol.matches.length === 1 ? 'match' : 'matches'}
-                      </Badge>
                     </div>
+                    {renderBracketColumns(winnerRounds, 'brand')}
+                  </section>
+                )}
 
-                    <div className="flex flex-1 flex-col justify-around gap-4 py-2">
-                      {roundCol.matches.map((match) => (
-                        <BracketMatchCard
-                          key={match.id}
-                          match={match}
-                          participant1={
-                            match.participant1_id
-                              ? (participantById.get(match.participant1_id) ??
-                                null)
-                              : null
-                          }
-                          participant2={
-                            match.participant2_id
-                              ? (participantById.get(match.participant2_id) ??
-                                null)
-                              : null
-                          }
-                          myMemberId={myMemberId}
-                          isFinal={isFinalCol}
-                          onSelect={(m, preselectedWinnerId) =>
-                            setSelectedMatchState({
-                              matchId: m.id,
-                              preselectedWinnerId,
-                            })
-                          }
-                          onResolveConflict={handleResolveConflict}
-                        />
-                      ))}
+              {(bracketTab === 'all' || bracketTab === 'loser') &&
+                loserRounds.length > 0 && (
+                  <section className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="coral">Lower</Badge>
+                        <h3 className="text-sm font-extrabold uppercase tracking-wide text-foreground">
+                          Losers Bracket
+                        </h3>
+                      </div>
+                      <span className="text-xs font-semibold text-muted-foreground">
+                        Elimination matches — 1 more loss knocks a pair out
+                      </span>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                    {renderBracketColumns(loserRounds, 'coral')}
+                  </section>
+                )}
+
+              {(bracketTab === 'all' || bracketTab === 'grand_final') &&
+                grandFinalRounds.length > 0 && (
+                  <section className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="lime">Championship</Badge>
+                        <h3 className="text-sm font-extrabold uppercase tracking-wide text-foreground">
+                          Grand Finals
+                        </h3>
+                      </div>
+                      <span className="text-xs font-semibold text-muted-foreground">
+                        {hasResetMatch
+                          ? 'Winners Champion needs 1 win; Losers Champion must win Game 1 & Reset'
+                          : 'Winner-take-all championship match'}
+                      </span>
+                    </div>
+                    {renderBracketColumns(grandFinalRounds, 'lime')}
+                  </section>
+                )}
+            </>
+          )}
         </CardContent>
       </Card>
 
